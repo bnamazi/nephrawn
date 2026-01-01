@@ -1,0 +1,22 @@
+# Node
+node_modules/
+dist/
+build/
+
+# Env
+.env
+.env.*
+
+# Prisma
+prisma/migrations/**/migration_lock.toml
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+
+# Flutter
+.dart_tool/
+build/
+.pub/
