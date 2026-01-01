@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, requireRole } from "../middleware/auth.middleware.js";
 import { logInteraction } from "../services/interaction.service.js";
+import { getCheckinsByPatient } from "../services/checkin.service.js";
 
 const router = Router();
 
@@ -121,6 +122,46 @@ router.get("/patients/:patientId", async (req: Request, res: Response) => {
     });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch patient details" });
+  }
+});
+
+// GET /clinician/patients/:patientId/checkins - Get patient's symptom check-ins
+router.get("/patients/:patientId/checkins", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    // Verify enrollment
+    const enrollment = await prisma.enrollment.findUnique({
+      where: {
+        patientId_clinicianId: {
+          patientId,
+          clinicianId,
+        },
+      },
+    });
+
+    if (!enrollment || enrollment.status !== "ACTIVE") {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const checkins = await getCheckinsByPatient(patientId, { limit, offset });
+
+    // Log the interaction (RPM/CCM compliance)
+    await logInteraction({
+      patientId,
+      clinicianId,
+      interactionType: "CLINICIAN_VIEW",
+      metadata: { endpoint: "GET /clinician/patients/:patientId/checkins", count: checkins.length },
+    });
+
+    res.json({ checkins });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch patient check-ins" });
   }
 });
 

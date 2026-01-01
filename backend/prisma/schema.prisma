@@ -20,8 +20,9 @@ model Patient {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  enrollments     Enrollment[]
-  interactionLogs InteractionLog[]
+  enrollments      Enrollment[]
+  interactionLogs  InteractionLog[]
+  symptomCheckins  SymptomCheckin[]
 
   @@map("patients")
 }
@@ -97,4 +98,22 @@ enum InteractionType {
   CLINICIAN_NOTE
   CLINICIAN_CALL
   CLINICIAN_MESSAGE
+}
+
+// ============================================
+// Slice 2: Symptom Check-ins
+// ============================================
+
+model SymptomCheckin {
+  id        String   @id @default(uuid())
+  patientId String
+  timestamp DateTime @default(now())
+  symptoms  Json
+  notes     String?
+  createdAt DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([patientId, timestamp])
+  @@map("symptom_checkins")
 }
