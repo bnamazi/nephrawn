@@ -1,8 +1,16 @@
 import { Router, Request, Response } from "express";
+import { AlertStatus, MeasurementType } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, requireRole } from "../middleware/auth.middleware.js";
 import { logInteraction } from "../services/interaction.service.js";
 import { getCheckinsByPatient } from "../services/checkin.service.js";
+import { getMeasurementsByPatient } from "../services/measurement.service.js";
+import {
+  getAlertsForClinician,
+  getAlertById,
+  acknowledgeAlert,
+  dismissAlert,
+} from "../services/alert.service.js";
 
 const router = Router();
 
@@ -162,6 +170,161 @@ router.get("/patients/:patientId/checkins", async (req: Request, res: Response) 
     res.json({ checkins });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch patient check-ins" });
+  }
+});
+
+// GET /clinician/patients/:patientId/measurements - Get patient's measurements
+router.get("/patients/:patientId/measurements", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    // Verify enrollment
+    const enrollment = await prisma.enrollment.findUnique({
+      where: {
+        patientId_clinicianId: {
+          patientId,
+          clinicianId,
+        },
+      },
+    });
+
+    if (!enrollment || enrollment.status !== "ACTIVE") {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const type = req.query.type as MeasurementType | undefined;
+
+    const measurements = await getMeasurementsByPatient(patientId, { limit, offset, type });
+
+    // Log the interaction (RPM/CCM compliance)
+    await logInteraction({
+      patientId,
+      clinicianId,
+      interactionType: "CLINICIAN_VIEW",
+      metadata: { endpoint: "GET /clinician/patients/:patientId/measurements", count: measurements.length },
+    });
+
+    res.json({ measurements });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch patient measurements" });
+  }
+});
+
+// ============================================
+// Alerts
+// ============================================
+
+// GET /clinician/alerts - Get all alerts for enrolled patients
+router.get("/alerts", async (req: Request, res: Response) => {
+  try {
+    const clinicianId = req.user!.sub;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const status = req.query.status as AlertStatus | undefined;
+
+    const alerts = await getAlertsForClinician(clinicianId, { status, limit, offset });
+
+    res.json({ alerts });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch alerts" });
+  }
+});
+
+// GET /clinician/alerts/:alertId - Get single alert details
+router.get("/alerts/:alertId", async (req: Request, res: Response) => {
+  try {
+    const { alertId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const alert = await getAlertById(alertId);
+
+    if (!alert) {
+      res.status(404).json({ error: "Alert not found" });
+      return;
+    }
+
+    // Verify clinician is enrolled with this patient
+    const enrollment = await prisma.enrollment.findUnique({
+      where: {
+        patientId_clinicianId: {
+          patientId: alert.patientId,
+          clinicianId,
+        },
+      },
+    });
+
+    if (!enrollment || enrollment.status !== "ACTIVE") {
+      res.status(404).json({ error: "Alert not found" });
+      return;
+    }
+
+    res.json({ alert });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch alert" });
+  }
+});
+
+// POST /clinician/alerts/:alertId/acknowledge - Acknowledge an alert
+router.post("/alerts/:alertId/acknowledge", async (req: Request, res: Response) => {
+  try {
+    const { alertId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const success = await acknowledgeAlert(alertId, clinicianId);
+
+    if (!success) {
+      res.status(404).json({ error: "Alert not found or already processed" });
+      return;
+    }
+
+    // Log the interaction (RPM/CCM compliance)
+    const alert = await getAlertById(alertId);
+    if (alert) {
+      await logInteraction({
+        patientId: alert.patientId,
+        clinicianId,
+        interactionType: "CLINICIAN_ALERT_ACK",
+        metadata: { alertId, ruleId: alert.ruleId },
+      });
+    }
+
+    res.json({ success: true, message: "Alert acknowledged" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to acknowledge alert" });
+  }
+});
+
+// POST /clinician/alerts/:alertId/dismiss - Dismiss an alert
+router.post("/alerts/:alertId/dismiss", async (req: Request, res: Response) => {
+  try {
+    const { alertId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const success = await dismissAlert(alertId, clinicianId);
+
+    if (!success) {
+      res.status(404).json({ error: "Alert not found or already dismissed" });
+      return;
+    }
+
+    // Log the interaction (RPM/CCM compliance)
+    const alert = await getAlertById(alertId);
+    if (alert) {
+      await logInteraction({
+        patientId: alert.patientId,
+        clinicianId,
+        interactionType: "CLINICIAN_ALERT_ACK",
+        metadata: { alertId, ruleId: alert.ruleId, action: "dismiss" },
+      });
+    }
+
+    res.json({ success: true, message: "Alert dismissed" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to dismiss alert" });
   }
 });
 

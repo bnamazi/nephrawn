@@ -23,6 +23,8 @@ model Patient {
   enrollments      Enrollment[]
   interactionLogs  InteractionLog[]
   symptomCheckins  SymptomCheckin[]
+  measurements     Measurement[]
+  alerts           Alert[]
 
   @@map("patients")
 }
@@ -36,8 +38,9 @@ model Clinician {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  enrollments     Enrollment[]
-  interactionLogs InteractionLog[]
+  enrollments       Enrollment[]
+  interactionLogs   InteractionLog[]
+  acknowledgedAlerts Alert[]
 
   @@map("clinicians")
 }
@@ -116,4 +119,67 @@ model SymptomCheckin {
 
   @@index([patientId, timestamp])
   @@map("symptom_checkins")
+}
+
+// ============================================
+// Slice 3: Measurements & Alerts
+// ============================================
+
+model Measurement {
+  id         String          @id @default(uuid())
+  patientId  String
+  timestamp  DateTime        @default(now())
+  type       MeasurementType
+  value      Decimal         @db.Decimal(10, 2)
+  unit       String
+  source     String          @default("manual") // manual, withings, etc.
+  externalId String?         // vendor's record ID for dedup
+  createdAt  DateTime        @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([patientId, type, timestamp])
+  @@map("measurements")
+}
+
+enum MeasurementType {
+  WEIGHT
+  BP_SYSTOLIC
+  BP_DIASTOLIC
+  SPO2
+  HEART_RATE
+}
+
+model Alert {
+  id             String        @id @default(uuid())
+  patientId      String
+  triggeredAt    DateTime      @default(now())
+  ruleId         String        // e.g., 'weight_gain_48h'
+  ruleName       String        // Human-readable name
+  severity       AlertSeverity
+  status         AlertStatus   @default(OPEN)
+  inputs         Json          // Data that triggered the alert (explainability)
+  summaryText    String?       // LLM-generated explanation (nullable)
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  patient    Patient    @relation(fields: [patientId], references: [id])
+  clinician  Clinician? @relation(fields: [acknowledgedBy], references: [id])
+
+  @@index([patientId, status, triggeredAt])
+  @@map("alerts")
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  DISMISSED
 }

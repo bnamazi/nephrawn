@@ -36,6 +36,32 @@ export const symptomCheckinSchema = z.object({
   timestamp: z.string().datetime().optional(),
 });
 
+// Measurement types and validation
+export const measurementTypeSchema = z.enum([
+  "WEIGHT",
+  "BP_SYSTOLIC",
+  "BP_DIASTOLIC",
+  "SPO2",
+  "HEART_RATE",
+]);
+
+export const measurementSchema = z.object({
+  type: measurementTypeSchema,
+  value: z.number().positive("Value must be positive"),
+  unit: z.string().min(1, "Unit is required"),
+  timestamp: z.string().datetime().optional(),
+});
+
+// Blood pressure is submitted as a pair
+export const bloodPressureSchema = z.object({
+  systolic: z.number().min(40).max(300),
+  diastolic: z.number().min(20).max(200),
+  unit: z.literal("mmHg").optional().default("mmHg"),
+  timestamp: z.string().datetime().optional(),
+});
+
 export type PatientRegisterDto = z.infer<typeof patientRegisterSchema>;
 export type LoginDto = z.infer<typeof loginSchema>;
 export type SymptomCheckinDto = z.infer<typeof symptomCheckinSchema>;
+export type MeasurementDto = z.infer<typeof measurementSchema>;
+export type BloodPressureDto = z.infer<typeof bloodPressureSchema>;
