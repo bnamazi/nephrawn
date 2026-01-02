@@ -19,6 +19,13 @@ import {
   updateNote,
   deleteNote,
 } from "../services/note.service.js";
+import {
+  getTimeSeriesData,
+  getDailyAggregates,
+  getBloodPressureTimeSeries,
+  getMeasurementSummary,
+  getPatientDashboard,
+} from "../services/timeseries.service.js";
 
 const router = Router();
 
@@ -478,6 +485,149 @@ router.delete("/notes/:noteId", async (req: Request, res: Response) => {
     res.json({ success: true, message: "Note deleted" });
   } catch (error) {
     res.status(500).json({ error: "Failed to delete note" });
+  }
+});
+
+// ============================================
+// Time-Series Charts
+// ============================================
+
+// Helper to verify enrollment
+async function verifyEnrollment(patientId: string, clinicianId: string) {
+  const enrollment = await prisma.enrollment.findUnique({
+    where: {
+      patientId_clinicianId: { patientId, clinicianId },
+    },
+  });
+  return enrollment?.status === "ACTIVE";
+}
+
+// Helper to parse date range from query params
+function parseDateRange(query: Record<string, unknown>) {
+  const from = query.from ? new Date(query.from as string) : undefined;
+  const to = query.to ? new Date(query.to as string) : undefined;
+  return { from, to };
+}
+
+// GET /clinician/patients/:patientId/dashboard - Get patient dashboard overview
+router.get("/patients/:patientId/dashboard", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    if (!(await verifyEnrollment(patientId, clinicianId))) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    const { from, to } = parseDateRange(req.query);
+    const dashboard = await getPatientDashboard(patientId, { from, to });
+
+    await logInteraction({
+      patientId,
+      clinicianId,
+      interactionType: "CLINICIAN_VIEW",
+      metadata: { endpoint: "GET /clinician/patients/:patientId/dashboard" },
+    });
+
+    res.json({ dashboard });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch dashboard" });
+  }
+});
+
+// GET /clinician/patients/:patientId/charts/:type - Get time-series data for charting
+router.get("/patients/:patientId/charts/:type", async (req: Request, res: Response) => {
+  try {
+    const { patientId, type } = req.params;
+    const clinicianId = req.user!.sub;
+
+    if (!(await verifyEnrollment(patientId, clinicianId))) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    // Special handling for blood pressure
+    if (type === "blood-pressure" || type === "BP") {
+      const { from, to } = parseDateRange(req.query);
+      const limit = parseInt(req.query.limit as string) || undefined;
+      const data = await getBloodPressureTimeSeries(patientId, { from, to, limit });
+
+      if (!data) {
+        res.json({ data: null, message: "No blood pressure data found" });
+        return;
+      }
+
+      await logInteraction({
+        patientId,
+        clinicianId,
+        interactionType: "CLINICIAN_VIEW",
+        metadata: { endpoint: "GET /clinician/patients/:patientId/charts/blood-pressure" },
+      });
+
+      res.json({ data });
+      return;
+    }
+
+    // Validate measurement type
+    const validTypes: MeasurementType[] = ["WEIGHT", "BP_SYSTOLIC", "BP_DIASTOLIC", "SPO2", "HEART_RATE"];
+    if (!validTypes.includes(type as MeasurementType)) {
+      res.status(400).json({ error: `Invalid type. Valid types: ${validTypes.join(", ")}, blood-pressure` });
+      return;
+    }
+
+    const { from, to } = parseDateRange(req.query);
+    const limit = parseInt(req.query.limit as string) || undefined;
+    const aggregate = req.query.aggregate === "daily";
+
+    let data;
+    if (aggregate) {
+      data = await getDailyAggregates(patientId, type as MeasurementType, { from, to });
+    } else {
+      data = await getTimeSeriesData(patientId, type as MeasurementType, { from, to, limit });
+    }
+
+    if (!data) {
+      res.json({ data: null, message: `No ${type} data found` });
+      return;
+    }
+
+    await logInteraction({
+      patientId,
+      clinicianId,
+      interactionType: "CLINICIAN_VIEW",
+      metadata: { endpoint: `GET /clinician/patients/:patientId/charts/${type}`, aggregate },
+    });
+
+    res.json({ data });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch chart data" });
+  }
+});
+
+// GET /clinician/patients/:patientId/summary/:type - Get measurement summary with trend
+router.get("/patients/:patientId/summary/:type", async (req: Request, res: Response) => {
+  try {
+    const { patientId, type } = req.params;
+    const clinicianId = req.user!.sub;
+
+    if (!(await verifyEnrollment(patientId, clinicianId))) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    const validTypes: MeasurementType[] = ["WEIGHT", "BP_SYSTOLIC", "BP_DIASTOLIC", "SPO2", "HEART_RATE"];
+    if (!validTypes.includes(type as MeasurementType)) {
+      res.status(400).json({ error: `Invalid type. Valid types: ${validTypes.join(", ")}` });
+      return;
+    }
+
+    const { from, to } = parseDateRange(req.query);
+    const summary = await getMeasurementSummary(patientId, type as MeasurementType, { from, to });
+
+    res.json({ summary });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch summary" });
   }
 });
 

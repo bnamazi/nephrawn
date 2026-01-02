@@ -6,6 +6,13 @@ import { symptomCheckinSchema, measurementSchema, bloodPressureSchema } from "..
 import { createCheckin, getCheckinsByPatient } from "../services/checkin.service.js";
 import { createMeasurement, getMeasurementsByPatient } from "../services/measurement.service.js";
 import { getAlertsByPatient } from "../services/alert.service.js";
+import {
+  getTimeSeriesData,
+  getDailyAggregates,
+  getBloodPressureTimeSeries,
+  getMeasurementSummary,
+  getPatientDashboard,
+} from "../services/timeseries.service.js";
 
 const router = Router();
 
@@ -171,6 +178,102 @@ router.get("/alerts", async (req: Request, res: Response) => {
     res.json({ alerts });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch alerts" });
+  }
+});
+
+// ============================================
+// Charts & Dashboard
+// ============================================
+
+// Helper to parse date range from query params
+function parseDateRange(query: Record<string, unknown>) {
+  const from = query.from ? new Date(query.from as string) : undefined;
+  const to = query.to ? new Date(query.to as string) : undefined;
+  return { from, to };
+}
+
+// GET /patient/dashboard - Get own dashboard overview
+router.get("/dashboard", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { from, to } = parseDateRange(req.query);
+
+    const dashboard = await getPatientDashboard(patientId, { from, to });
+
+    res.json({ dashboard });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch dashboard" });
+  }
+});
+
+// GET /patient/charts/:type - Get own time-series data for charting
+router.get("/charts/:type", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { type } = req.params;
+
+    // Special handling for blood pressure
+    if (type === "blood-pressure" || type === "BP") {
+      const { from, to } = parseDateRange(req.query);
+      const limit = parseInt(req.query.limit as string) || undefined;
+      const data = await getBloodPressureTimeSeries(patientId, { from, to, limit });
+
+      if (!data) {
+        res.json({ data: null, message: "No blood pressure data found" });
+        return;
+      }
+
+      res.json({ data });
+      return;
+    }
+
+    // Validate measurement type
+    const validTypes: MeasurementType[] = ["WEIGHT", "BP_SYSTOLIC", "BP_DIASTOLIC", "SPO2", "HEART_RATE"];
+    if (!validTypes.includes(type as MeasurementType)) {
+      res.status(400).json({ error: `Invalid type. Valid types: ${validTypes.join(", ")}, blood-pressure` });
+      return;
+    }
+
+    const { from, to } = parseDateRange(req.query);
+    const limit = parseInt(req.query.limit as string) || undefined;
+    const aggregate = req.query.aggregate === "daily";
+
+    let data;
+    if (aggregate) {
+      data = await getDailyAggregates(patientId, type as MeasurementType, { from, to });
+    } else {
+      data = await getTimeSeriesData(patientId, type as MeasurementType, { from, to, limit });
+    }
+
+    if (!data) {
+      res.json({ data: null, message: `No ${type} data found` });
+      return;
+    }
+
+    res.json({ data });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch chart data" });
+  }
+});
+
+// GET /patient/summary/:type - Get own measurement summary with trend
+router.get("/summary/:type", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { type } = req.params;
+
+    const validTypes: MeasurementType[] = ["WEIGHT", "BP_SYSTOLIC", "BP_DIASTOLIC", "SPO2", "HEART_RATE"];
+    if (!validTypes.includes(type as MeasurementType)) {
+      res.status(400).json({ error: `Invalid type. Valid types: ${validTypes.join(", ")}` });
+      return;
+    }
+
+    const { from, to } = parseDateRange(req.query);
+    const summary = await getMeasurementSummary(patientId, type as MeasurementType, { from, to });
+
+    res.json({ summary });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch summary" });
   }
 });
 
