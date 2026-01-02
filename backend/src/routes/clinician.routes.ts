@@ -11,6 +11,14 @@ import {
   acknowledgeAlert,
   dismissAlert,
 } from "../services/alert.service.js";
+import {
+  createNote,
+  getNotesByPatient,
+  getNotesByAlert,
+  getNoteById,
+  updateNote,
+  deleteNote,
+} from "../services/note.service.js";
 
 const router = Router();
 
@@ -325,6 +333,151 @@ router.post("/alerts/:alertId/dismiss", async (req: Request, res: Response) => {
     res.json({ success: true, message: "Alert dismissed" });
   } catch (error) {
     res.status(500).json({ error: "Failed to dismiss alert" });
+  }
+});
+
+// ============================================
+// Clinician Notes
+// ============================================
+
+// POST /clinician/patients/:patientId/notes - Create a note for a patient
+router.post("/patients/:patientId/notes", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+    const { content, alertId } = req.body;
+
+    if (!content || typeof content !== "string" || content.trim().length === 0) {
+      res.status(400).json({ error: "Content is required" });
+      return;
+    }
+
+    const note = await createNote({
+      patientId,
+      clinicianId,
+      alertId,
+      content: content.trim(),
+    });
+
+    if (!note) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    res.status(201).json({ note });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to create note" });
+  }
+});
+
+// GET /clinician/patients/:patientId/notes - Get notes for a patient
+router.get("/patients/:patientId/notes", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const notes = await getNotesByPatient(patientId, clinicianId, { limit, offset });
+
+    if (notes === null) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    // Log the interaction (RPM/CCM compliance)
+    await logInteraction({
+      patientId,
+      clinicianId,
+      interactionType: "CLINICIAN_VIEW",
+      metadata: { endpoint: "GET /clinician/patients/:patientId/notes", count: notes.length },
+    });
+
+    res.json({ notes });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch notes" });
+  }
+});
+
+// GET /clinician/alerts/:alertId/notes - Get notes attached to an alert
+router.get("/alerts/:alertId/notes", async (req: Request, res: Response) => {
+  try {
+    const { alertId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const notes = await getNotesByAlert(alertId, clinicianId);
+
+    if (notes === null) {
+      res.status(404).json({ error: "Alert not found or not authorized" });
+      return;
+    }
+
+    res.json({ notes });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch notes" });
+  }
+});
+
+// GET /clinician/notes/:noteId - Get a single note
+router.get("/notes/:noteId", async (req: Request, res: Response) => {
+  try {
+    const { noteId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const note = await getNoteById(noteId, clinicianId);
+
+    if (!note) {
+      res.status(404).json({ error: "Note not found" });
+      return;
+    }
+
+    res.json({ note });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch note" });
+  }
+});
+
+// PUT /clinician/notes/:noteId - Update a note (author only)
+router.put("/notes/:noteId", async (req: Request, res: Response) => {
+  try {
+    const { noteId } = req.params;
+    const clinicianId = req.user!.sub;
+    const { content } = req.body;
+
+    if (!content || typeof content !== "string" || content.trim().length === 0) {
+      res.status(400).json({ error: "Content is required" });
+      return;
+    }
+
+    const note = await updateNote(noteId, clinicianId, content.trim());
+
+    if (!note) {
+      res.status(404).json({ error: "Note not found or not authorized" });
+      return;
+    }
+
+    res.json({ note });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update note" });
+  }
+});
+
+// DELETE /clinician/notes/:noteId - Delete a note (author only)
+router.delete("/notes/:noteId", async (req: Request, res: Response) => {
+  try {
+    const { noteId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const success = await deleteNote(noteId, clinicianId);
+
+    if (!success) {
+      res.status(404).json({ error: "Note not found or not authorized" });
+      return;
+    }
+
+    res.json({ success: true, message: "Note deleted" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete note" });
   }
 });
 
