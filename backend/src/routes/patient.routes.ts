@@ -98,7 +98,7 @@ router.post("/measurements", async (req: Request, res: Response) => {
       return;
     }
 
-    const measurement = await createMeasurement({
+    const result = await createMeasurement({
       patientId: req.user!.sub,
       type: parsed.data.type as MeasurementType,
       value: parsed.data.value,
@@ -106,10 +106,23 @@ router.post("/measurements", async (req: Request, res: Response) => {
       timestamp: parsed.data.timestamp ? new Date(parsed.data.timestamp) : undefined,
     });
 
-    res.status(201).json({ measurement });
+    if (result.isDuplicate) {
+      res.status(200).json({
+        measurement: result.measurement,
+        isDuplicate: true,
+        message: "Duplicate measurement detected, returning existing record",
+      });
+      return;
+    }
+
+    res.status(201).json({
+      measurement: result.measurement,
+      convertedFrom: result.convertedFrom,
+    });
   } catch (error) {
     console.error("Measurement error:", error);
-    res.status(500).json({ error: "Failed to create measurement" });
+    const message = error instanceof Error ? error.message : "Failed to create measurement";
+    res.status(400).json({ error: message });
   }
 });
 
@@ -125,30 +138,36 @@ router.post("/measurements/blood-pressure", async (req: Request, res: Response) 
 
     const timestamp = parsed.data.timestamp ? new Date(parsed.data.timestamp) : new Date();
 
-    // Create both measurements
-    const [systolic, diastolic] = await Promise.all([
-      createMeasurement({
-        patientId: req.user!.sub,
-        type: "BP_SYSTOLIC",
-        value: parsed.data.systolic,
-        unit: parsed.data.unit,
-        timestamp,
-      }),
-      createMeasurement({
-        patientId: req.user!.sub,
-        type: "BP_DIASTOLIC",
-        value: parsed.data.diastolic,
-        unit: parsed.data.unit,
-        timestamp,
-      }),
-    ]);
+    // Create both measurements (sequentially to ensure same timestamp handling)
+    const systolicResult = await createMeasurement({
+      patientId: req.user!.sub,
+      type: "BP_SYSTOLIC",
+      value: parsed.data.systolic,
+      unit: parsed.data.unit,
+      timestamp,
+    });
 
-    res.status(201).json({
-      measurements: { systolic, diastolic },
+    const diastolicResult = await createMeasurement({
+      patientId: req.user!.sub,
+      type: "BP_DIASTOLIC",
+      value: parsed.data.diastolic,
+      unit: parsed.data.unit,
+      timestamp,
+    });
+
+    const anyDuplicate = systolicResult.isDuplicate || diastolicResult.isDuplicate;
+
+    res.status(anyDuplicate ? 200 : 201).json({
+      measurements: {
+        systolic: systolicResult.measurement,
+        diastolic: diastolicResult.measurement,
+      },
+      isDuplicate: anyDuplicate,
     });
   } catch (error) {
     console.error("Blood pressure error:", error);
-    res.status(500).json({ error: "Failed to create blood pressure measurement" });
+    const message = error instanceof Error ? error.message : "Failed to create blood pressure measurement";
+    res.status(400).json({ error: message });
   }
 });
 

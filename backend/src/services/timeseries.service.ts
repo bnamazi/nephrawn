@@ -1,5 +1,26 @@
 import { MeasurementType } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { TREND_THRESHOLDS, MIN_TREND_TIME_SPAN_MS, fromCanonical, DISPLAY_UNITS } from "../lib/units.js";
+
+// ============================================
+// Guardrails
+// ============================================
+
+const DEFAULT_LIMIT = 200;
+const HARD_MAX_LIMIT = 2000;
+const DEFAULT_TIMEZONE = "UTC";
+
+// Blood pressure pairing window (measurements within this window are considered paired)
+const BP_PAIRING_WINDOW_MS = 60 * 1000; // 1 minute
+
+function clampLimit(limit: number | undefined): number {
+  if (limit === undefined) return DEFAULT_LIMIT;
+  return Math.min(Math.max(1, limit), HARD_MAX_LIMIT);
+}
+
+// ============================================
+// Types
+// ============================================
 
 export type TimeSeriesPoint = {
   timestamp: string;
@@ -17,20 +38,33 @@ export type DailyAggregate = {
 export type TimeSeriesResponse = {
   type: MeasurementType;
   unit: string;
+  displayUnit: string;
   points: TimeSeriesPoint[];
   range: {
     from: string;
     to: string;
+  };
+  meta: {
+    timezone: string;
+    totalCount: number;
+    returnedCount: number;
+    hasMore: boolean;
   };
 };
 
 export type DailyAggregateResponse = {
   type: MeasurementType;
   unit: string;
+  displayUnit: string;
   aggregates: DailyAggregate[];
   range: {
     from: string;
     to: string;
+  };
+  meta: {
+    timezone: string;
+    bucketDefinition: string;
+    totalDays: number;
   };
 };
 
@@ -44,22 +78,33 @@ export async function getTimeSeriesData(
     from?: Date;
     to?: Date;
     limit?: number;
+    displayUnit?: string;
+    timezone?: string;
   }
 ): Promise<TimeSeriesResponse | null> {
-  const from = options?.from ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Default: last 30 days
+  const from = options?.from ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const to = options?.to ?? new Date();
+  const limit = clampLimit(options?.limit);
+  const timezone = options?.timezone ?? DEFAULT_TIMEZONE;
+  const displayUnit = options?.displayUnit ?? DISPLAY_UNITS[type];
+
+  // Get total count first
+  const totalCount = await prisma.measurement.count({
+    where: {
+      patientId,
+      type,
+      timestamp: { gte: from, lte: to },
+    },
+  });
 
   const measurements = await prisma.measurement.findMany({
     where: {
       patientId,
       type,
-      timestamp: {
-        gte: from,
-        lte: to,
-      },
+      timestamp: { gte: from, lte: to },
     },
     orderBy: { timestamp: "asc" },
-    take: options?.limit ?? 1000,
+    take: limit,
     select: {
       timestamp: true,
       value: true,
@@ -71,16 +116,25 @@ export async function getTimeSeriesData(
     return null;
   }
 
+  const canonicalUnit = measurements[0].unit;
+
   return {
     type,
-    unit: measurements[0].unit,
+    unit: canonicalUnit,
+    displayUnit,
     points: measurements.map((m) => ({
       timestamp: m.timestamp.toISOString(),
-      value: m.value.toNumber(),
+      value: fromCanonical(type, m.value.toNumber(), displayUnit),
     })),
     range: {
       from: from.toISOString(),
       to: to.toISOString(),
+    },
+    meta: {
+      timezone,
+      totalCount,
+      returnedCount: measurements.length,
+      hasMore: totalCount > measurements.length,
     },
   };
 }
@@ -94,22 +148,27 @@ export async function getDailyAggregates(
   options?: {
     from?: Date;
     to?: Date;
+    displayUnit?: string;
+    timezone?: string;
   }
 ): Promise<DailyAggregateResponse | null> {
-  const from = options?.from ?? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // Default: last 90 days
+  const from = options?.from ?? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
   const to = options?.to ?? new Date();
+  const timezone = options?.timezone ?? DEFAULT_TIMEZONE;
+  const displayUnit = options?.displayUnit ?? DISPLAY_UNITS[type];
 
-  // Get all measurements in range
+  // Limit to 365 days max to prevent unbounded queries
+  const maxRange = 365 * 24 * 60 * 60 * 1000;
+  const adjustedFrom = new Date(Math.max(from.getTime(), to.getTime() - maxRange));
+
   const measurements = await prisma.measurement.findMany({
     where: {
       patientId,
       type,
-      timestamp: {
-        gte: from,
-        lte: to,
-      },
+      timestamp: { gte: adjustedFrom, lte: to },
     },
     orderBy: { timestamp: "asc" },
+    take: HARD_MAX_LIMIT, // Safety limit
     select: {
       timestamp: true,
       value: true,
@@ -121,41 +180,49 @@ export async function getDailyAggregates(
     return null;
   }
 
+  const canonicalUnit = measurements[0].unit;
+
   // Group by date and calculate aggregates
-  const dailyMap = new Map<string, { values: number[]; unit: string }>();
+  // Note: Using UTC for bucketing. Frontend should interpret dates in patient timezone.
+  const dailyMap = new Map<string, number[]>();
 
   for (const m of measurements) {
-    const dateKey = m.timestamp.toISOString().split("T")[0]; // YYYY-MM-DD
+    const dateKey = m.timestamp.toISOString().split("T")[0]; // YYYY-MM-DD in UTC
+    const displayValue = fromCanonical(type, m.value.toNumber(), displayUnit);
     const existing = dailyMap.get(dateKey);
     if (existing) {
-      existing.values.push(m.value.toNumber());
+      existing.push(displayValue);
     } else {
-      dailyMap.set(dateKey, { values: [m.value.toNumber()], unit: m.unit });
+      dailyMap.set(dateKey, [displayValue]);
     }
   }
 
   const aggregates: DailyAggregate[] = [];
-  for (const [date, data] of dailyMap.entries()) {
-    const values = data.values;
+  for (const [date, values] of dailyMap.entries()) {
     aggregates.push({
       date,
-      min: Math.min(...values),
-      max: Math.max(...values),
+      min: Number(Math.min(...values).toFixed(2)),
+      max: Number(Math.max(...values).toFixed(2)),
       avg: Number((values.reduce((a, b) => a + b, 0) / values.length).toFixed(2)),
       count: values.length,
     });
   }
 
-  // Sort by date
   aggregates.sort((a, b) => a.date.localeCompare(b.date));
 
   return {
     type,
-    unit: measurements[0].unit,
+    unit: canonicalUnit,
+    displayUnit,
     aggregates,
     range: {
-      from: from.toISOString(),
+      from: adjustedFrom.toISOString(),
       to: to.toISOString(),
+    },
+    meta: {
+      timezone,
+      bucketDefinition: `Daily buckets in ${timezone}. Date represents start of day (00:00:00).`,
+      totalDays: aggregates.length,
     },
   };
 }
@@ -176,6 +243,13 @@ export type BloodPressureResponse = {
     from: string;
     to: string;
   };
+  meta: {
+    timezone: string;
+    pairingWindowMs: number;
+    pairedCount: number;
+    unpairedSystolicCount: number;
+    unpairedDiastolicCount: number;
+  };
 };
 
 export async function getBloodPressureTimeSeries(
@@ -184,10 +258,13 @@ export async function getBloodPressureTimeSeries(
     from?: Date;
     to?: Date;
     limit?: number;
+    timezone?: string;
   }
 ): Promise<BloodPressureResponse | null> {
   const from = options?.from ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const to = options?.to ?? new Date();
+  const limit = clampLimit(options?.limit);
+  const timezone = options?.timezone ?? DEFAULT_TIMEZONE;
 
   // Get both systolic and diastolic measurements
   const [systolicData, diastolicData] = await Promise.all([
@@ -198,6 +275,7 @@ export async function getBloodPressureTimeSeries(
         timestamp: { gte: from, lte: to },
       },
       orderBy: { timestamp: "asc" },
+      take: HARD_MAX_LIMIT,
       select: { timestamp: true, value: true, unit: true },
     }),
     prisma.measurement.findMany({
@@ -207,6 +285,7 @@ export async function getBloodPressureTimeSeries(
         timestamp: { gte: from, lte: to },
       },
       orderBy: { timestamp: "asc" },
+      take: HARD_MAX_LIMIT,
       select: { timestamp: true, value: true },
     }),
   ]);
@@ -215,36 +294,65 @@ export async function getBloodPressureTimeSeries(
     return null;
   }
 
-  // Create a map of diastolic readings by timestamp
-  const diastolicMap = new Map<string, number>();
-  for (const d of diastolicData) {
-    diastolicMap.set(d.timestamp.toISOString(), d.value.toNumber());
-  }
+  // Create a map of diastolic readings by timestamp (with window tolerance)
+  const diastolicByTime: Array<{ time: number; value: number; used: boolean }> =
+    diastolicData.map(d => ({
+      time: d.timestamp.getTime(),
+      value: d.value.toNumber(),
+      used: false,
+    }));
 
-  // Pair systolic with diastolic (they should have matching timestamps)
+  // Pair systolic with diastolic (within pairing window)
   const points: BloodPressurePoint[] = [];
+  const usedSystolic = new Set<number>();
+
   for (const s of systolicData) {
-    const ts = s.timestamp.toISOString();
-    const diastolic = diastolicMap.get(ts);
-    if (diastolic !== undefined) {
+    const sTime = s.timestamp.getTime();
+
+    // Find closest diastolic within window
+    let bestMatch: typeof diastolicByTime[0] | null = null;
+    let bestDiff = Infinity;
+
+    for (const d of diastolicByTime) {
+      if (d.used) continue;
+      const diff = Math.abs(sTime - d.time);
+      if (diff <= BP_PAIRING_WINDOW_MS && diff < bestDiff) {
+        bestDiff = diff;
+        bestMatch = d;
+      }
+    }
+
+    if (bestMatch) {
       points.push({
-        timestamp: ts,
+        timestamp: s.timestamp.toISOString(),
         systolic: s.value.toNumber(),
-        diastolic,
+        diastolic: bestMatch.value,
       });
+      bestMatch.used = true;
+      usedSystolic.add(sTime);
     }
   }
 
-  if (options?.limit && points.length > options.limit) {
-    points.splice(options.limit);
-  }
+  // Apply limit
+  const limitedPoints = points.slice(0, limit);
+
+  // Count unpaired
+  const unpairedSystolicCount = systolicData.length - points.length;
+  const unpairedDiastolicCount = diastolicByTime.filter(d => !d.used).length;
 
   return {
     unit: systolicData[0].unit,
-    points,
+    points: limitedPoints,
     range: {
       from: from.toISOString(),
       to: to.toISOString(),
+    },
+    meta: {
+      timezone,
+      pairingWindowMs: BP_PAIRING_WINDOW_MS,
+      pairedCount: points.length,
+      unpairedSystolicCount,
+      unpairedDiastolicCount,
     },
   };
 }
@@ -252,9 +360,22 @@ export async function getBloodPressureTimeSeries(
 /**
  * Get summary statistics for a measurement type
  */
+export type TrendMetadata = {
+  method: "two_window_comparison";
+  recentWindowSize: number;
+  olderWindowSize: number;
+  recentAvg: number;
+  olderAvg: number;
+  absoluteChange: number;
+  thresholdUsed: number;
+  timeSpanMs: number;
+  minTimeSpanMs: number;
+};
+
 export type MeasurementSummary = {
   type: MeasurementType;
   unit: string;
+  displayUnit: string;
   latest: {
     value: number;
     timestamp: string;
@@ -266,9 +387,13 @@ export type MeasurementSummary = {
     count: number;
   } | null;
   trend: "increasing" | "decreasing" | "stable" | "insufficient_data";
+  trendMeta?: TrendMetadata;
   range: {
     from: string;
     to: string;
+  };
+  meta: {
+    timezone: string;
   };
 };
 
@@ -278,10 +403,14 @@ export async function getMeasurementSummary(
   options?: {
     from?: Date;
     to?: Date;
+    displayUnit?: string;
+    timezone?: string;
   }
 ): Promise<MeasurementSummary> {
   const from = options?.from ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const to = options?.to ?? new Date();
+  const timezone = options?.timezone ?? DEFAULT_TIMEZONE;
+  const displayUnit = options?.displayUnit ?? DISPLAY_UNITS[type];
 
   const measurements = await prisma.measurement.findMany({
     where: {
@@ -290,6 +419,7 @@ export async function getMeasurementSummary(
       timestamp: { gte: from, lte: to },
     },
     orderBy: { timestamp: "desc" },
+    take: HARD_MAX_LIMIT,
     select: { timestamp: true, value: true, unit: true },
   });
 
@@ -297,52 +427,77 @@ export async function getMeasurementSummary(
     return {
       type,
       unit: "",
+      displayUnit,
       latest: null,
       stats: null,
       trend: "insufficient_data",
       range: { from: from.toISOString(), to: to.toISOString() },
+      meta: { timezone },
     };
   }
 
-  const values = measurements.map((m) => m.value.toNumber());
-  const unit = measurements[0].unit;
+  const canonicalUnit = measurements[0].unit;
+  const values = measurements.map((m) => fromCanonical(type, m.value.toNumber(), displayUnit));
 
-  // Calculate trend (compare first half avg to second half avg)
+  // Calculate trend with clinical thresholds
   let trend: MeasurementSummary["trend"] = "insufficient_data";
-  if (measurements.length >= 4) {
+  let trendMeta: TrendMetadata | undefined;
+
+  // Need at least 4 points AND sufficient time span
+  const timeSpanMs = measurements[0].timestamp.getTime() -
+                     measurements[measurements.length - 1].timestamp.getTime();
+
+  if (measurements.length >= 4 && timeSpanMs >= MIN_TREND_TIME_SPAN_MS) {
     const midpoint = Math.floor(measurements.length / 2);
     const recentHalf = values.slice(0, midpoint);
     const olderHalf = values.slice(midpoint);
 
     const recentAvg = recentHalf.reduce((a, b) => a + b, 0) / recentHalf.length;
     const olderAvg = olderHalf.reduce((a, b) => a + b, 0) / olderHalf.length;
+    const absoluteChange = recentAvg - olderAvg;
 
-    const percentChange = ((recentAvg - olderAvg) / olderAvg) * 100;
+    // Use clinically significant thresholds (converted to display unit)
+    const threshold = fromCanonical(type, TREND_THRESHOLDS[type].significant, displayUnit);
 
-    if (percentChange > 5) {
+    if (absoluteChange > threshold) {
       trend = "increasing";
-    } else if (percentChange < -5) {
+    } else if (absoluteChange < -threshold) {
       trend = "decreasing";
     } else {
       trend = "stable";
     }
+
+    trendMeta = {
+      method: "two_window_comparison",
+      recentWindowSize: recentHalf.length,
+      olderWindowSize: olderHalf.length,
+      recentAvg: Number(recentAvg.toFixed(2)),
+      olderAvg: Number(olderAvg.toFixed(2)),
+      absoluteChange: Number(absoluteChange.toFixed(2)),
+      thresholdUsed: Number(threshold.toFixed(2)),
+      timeSpanMs,
+      minTimeSpanMs: MIN_TREND_TIME_SPAN_MS,
+    };
   }
 
   return {
     type,
-    unit,
+    unit: canonicalUnit,
+    displayUnit,
     latest: {
       value: values[0],
       timestamp: measurements[0].timestamp.toISOString(),
     },
     stats: {
-      min: Math.min(...values),
-      max: Math.max(...values),
+      min: Number(Math.min(...values).toFixed(2)),
+      max: Number(Math.max(...values).toFixed(2)),
       avg: Number((values.reduce((a, b) => a + b, 0) / values.length).toFixed(2)),
       count: values.length,
     },
     trend,
+    trendMeta,
     range: { from: from.toISOString(), to: to.toISOString() },
+    meta: { timezone },
   };
 }
 
@@ -354,6 +509,7 @@ export async function getPatientDashboard(
   options?: {
     from?: Date;
     to?: Date;
+    timezone?: string;
   }
 ): Promise<{
   weight: MeasurementSummary;
@@ -363,13 +519,19 @@ export async function getPatientDashboard(
   };
   spo2: MeasurementSummary;
   heartRate: MeasurementSummary;
+  meta: {
+    timezone: string;
+    generatedAt: string;
+  };
 }> {
+  const timezone = options?.timezone ?? DEFAULT_TIMEZONE;
+
   const [weight, systolic, diastolic, spo2, heartRate] = await Promise.all([
-    getMeasurementSummary(patientId, "WEIGHT", options),
-    getMeasurementSummary(patientId, "BP_SYSTOLIC", options),
-    getMeasurementSummary(patientId, "BP_DIASTOLIC", options),
-    getMeasurementSummary(patientId, "SPO2", options),
-    getMeasurementSummary(patientId, "HEART_RATE", options),
+    getMeasurementSummary(patientId, "WEIGHT", { ...options, timezone }),
+    getMeasurementSummary(patientId, "BP_SYSTOLIC", { ...options, timezone }),
+    getMeasurementSummary(patientId, "BP_DIASTOLIC", { ...options, timezone }),
+    getMeasurementSummary(patientId, "SPO2", { ...options, timezone }),
+    getMeasurementSummary(patientId, "HEART_RATE", { ...options, timezone }),
   ]);
 
   return {
@@ -377,5 +539,9 @@ export async function getPatientDashboard(
     bloodPressure: { systolic, diastolic },
     spo2,
     heartRate,
+    meta: {
+      timezone,
+      generatedAt: new Date().toISOString(),
+    },
   };
 }

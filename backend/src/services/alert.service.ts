@@ -1,5 +1,6 @@
 import { AlertSeverity, AlertStatus, MeasurementType, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { ALERT_THRESHOLDS } from "../lib/units.js";
 
 // ============================================
 // Alert Rule Definitions
@@ -18,11 +19,14 @@ type AlertTrigger = {
   inputs: Record<string, unknown>;
 };
 
+/**
+ * Alert rules now use canonical units (kg for weight, mmHg for BP, etc.)
+ */
 const ALERT_RULES: AlertRule[] = [
   {
     id: "weight_gain_48h",
     name: "Rapid Weight Gain",
-    description: "Weight increase of 3+ lbs within 48 hours",
+    description: `Weight increase of ${ALERT_THRESHOLDS.WEIGHT_GAIN_48H} kg (~3 lbs) within 48 hours`,
     measurementType: "WEIGHT",
     evaluate: async (patientId: string): Promise<AlertTrigger | null> => {
       const since = new Date(Date.now() - 48 * 60 * 60 * 1000);
@@ -34,7 +38,7 @@ const ALERT_RULES: AlertRule[] = [
           timestamp: { gte: since },
         },
         orderBy: { timestamp: "asc" },
-        select: { id: true, value: true, timestamp: true },
+        select: { id: true, value: true, timestamp: true, unit: true },
       });
 
       if (measurements.length < 2) return null;
@@ -43,19 +47,21 @@ const ALERT_RULES: AlertRule[] = [
       const newest = measurements[measurements.length - 1];
       const delta = newest.value.toNumber() - oldest.value.toNumber();
 
-      if (delta >= 3) {
+      // Thresholds are in kg (canonical unit)
+      if (delta >= ALERT_THRESHOLDS.WEIGHT_GAIN_48H) {
         return {
-          severity: delta >= 5 ? "CRITICAL" : "WARNING",
+          severity: delta >= ALERT_THRESHOLDS.WEIGHT_GAIN_48H_CRITICAL ? "CRITICAL" : "WARNING",
           inputs: {
             measurements: measurements.map(m => ({
               id: m.id,
               value: m.value.toNumber(),
+              unit: m.unit,
               timestamp: m.timestamp.toISOString(),
             })),
             oldestValue: oldest.value.toNumber(),
             newestValue: newest.value.toNumber(),
-            delta,
-            threshold: 3,
+            delta: Number(delta.toFixed(2)),
+            thresholdKg: ALERT_THRESHOLDS.WEIGHT_GAIN_48H,
             windowHours: 48,
           },
         };
@@ -67,7 +73,7 @@ const ALERT_RULES: AlertRule[] = [
   {
     id: "bp_systolic_high",
     name: "High Systolic Blood Pressure",
-    description: "Systolic BP reading above 180 mmHg",
+    description: `Systolic BP reading above ${ALERT_THRESHOLDS.BP_SYSTOLIC_HIGH} mmHg`,
     measurementType: "BP_SYSTOLIC",
     evaluate: async (patientId: string): Promise<AlertTrigger | null> => {
       const latest = await prisma.measurement.findFirst({
@@ -76,23 +82,24 @@ const ALERT_RULES: AlertRule[] = [
           type: "BP_SYSTOLIC",
         },
         orderBy: { timestamp: "desc" },
-        select: { id: true, value: true, timestamp: true },
+        select: { id: true, value: true, timestamp: true, unit: true },
       });
 
       if (!latest) return null;
 
       const value = latest.value.toNumber();
 
-      if (value >= 180) {
+      if (value >= ALERT_THRESHOLDS.BP_SYSTOLIC_HIGH) {
         return {
-          severity: value >= 200 ? "CRITICAL" : "WARNING",
+          severity: value >= ALERT_THRESHOLDS.BP_SYSTOLIC_CRITICAL ? "CRITICAL" : "WARNING",
           inputs: {
             measurement: {
               id: latest.id,
               value,
+              unit: latest.unit,
               timestamp: latest.timestamp.toISOString(),
             },
-            threshold: 180,
+            threshold: ALERT_THRESHOLDS.BP_SYSTOLIC_HIGH,
           },
         };
       }
@@ -103,7 +110,7 @@ const ALERT_RULES: AlertRule[] = [
   {
     id: "bp_systolic_low",
     name: "Low Systolic Blood Pressure",
-    description: "Systolic BP reading below 90 mmHg",
+    description: `Systolic BP reading below ${ALERT_THRESHOLDS.BP_SYSTOLIC_LOW} mmHg`,
     measurementType: "BP_SYSTOLIC",
     evaluate: async (patientId: string): Promise<AlertTrigger | null> => {
       const latest = await prisma.measurement.findFirst({
@@ -112,23 +119,24 @@ const ALERT_RULES: AlertRule[] = [
           type: "BP_SYSTOLIC",
         },
         orderBy: { timestamp: "desc" },
-        select: { id: true, value: true, timestamp: true },
+        select: { id: true, value: true, timestamp: true, unit: true },
       });
 
       if (!latest) return null;
 
       const value = latest.value.toNumber();
 
-      if (value < 90) {
+      if (value < ALERT_THRESHOLDS.BP_SYSTOLIC_LOW) {
         return {
-          severity: value < 80 ? "CRITICAL" : "WARNING",
+          severity: value < ALERT_THRESHOLDS.BP_SYSTOLIC_CRITICAL_LOW ? "CRITICAL" : "WARNING",
           inputs: {
             measurement: {
               id: latest.id,
               value,
+              unit: latest.unit,
               timestamp: latest.timestamp.toISOString(),
             },
-            threshold: 90,
+            threshold: ALERT_THRESHOLDS.BP_SYSTOLIC_LOW,
           },
         };
       }
@@ -139,7 +147,7 @@ const ALERT_RULES: AlertRule[] = [
   {
     id: "spo2_low",
     name: "Low Oxygen Saturation",
-    description: "SpO2 reading below 92%",
+    description: `SpO2 reading below ${ALERT_THRESHOLDS.SPO2_LOW}%`,
     measurementType: "SPO2",
     evaluate: async (patientId: string): Promise<AlertTrigger | null> => {
       const latest = await prisma.measurement.findFirst({
@@ -148,23 +156,24 @@ const ALERT_RULES: AlertRule[] = [
           type: "SPO2",
         },
         orderBy: { timestamp: "desc" },
-        select: { id: true, value: true, timestamp: true },
+        select: { id: true, value: true, timestamp: true, unit: true },
       });
 
       if (!latest) return null;
 
       const value = latest.value.toNumber();
 
-      if (value < 92) {
+      if (value < ALERT_THRESHOLDS.SPO2_LOW) {
         return {
-          severity: value < 88 ? "CRITICAL" : "WARNING",
+          severity: value < ALERT_THRESHOLDS.SPO2_CRITICAL ? "CRITICAL" : "WARNING",
           inputs: {
             measurement: {
               id: latest.id,
               value,
+              unit: latest.unit,
               timestamp: latest.timestamp.toISOString(),
             },
-            threshold: 92,
+            threshold: ALERT_THRESHOLDS.SPO2_LOW,
           },
         };
       }
@@ -178,7 +187,11 @@ const ALERT_RULES: AlertRule[] = [
 // Rule Engine
 // ============================================
 
-export async function evaluateRules(
+/**
+ * Evaluate rules atomically with proper deduplication.
+ * If an OPEN alert exists, update its inputs instead of creating a new one.
+ */
+export async function evaluateRulesAtomic(
   patientId: string,
   measurementType: MeasurementType
 ): Promise<void> {
@@ -191,31 +204,56 @@ export async function evaluateRules(
       const trigger = await rule.evaluate(patientId);
 
       if (trigger) {
-        // Check if there's already an open alert for this rule
-        const existingAlert = await prisma.alert.findFirst({
-          where: {
-            patientId,
-            ruleId: rule.id,
-            status: "OPEN",
-          },
-        });
-
-        if (!existingAlert) {
-          await prisma.alert.create({
-            data: {
+        // Use transaction to prevent race conditions
+        await prisma.$transaction(async (tx) => {
+          // Check if there's already an open alert for this rule
+          const existingAlert = await tx.alert.findFirst({
+            where: {
               patientId,
               ruleId: rule.id,
-              ruleName: rule.name,
-              severity: trigger.severity,
-              inputs: trigger.inputs as Prisma.InputJsonValue,
+              status: "OPEN",
             },
           });
-        }
+
+          if (existingAlert) {
+            // Update existing alert with new inputs (condition is ongoing)
+            await tx.alert.update({
+              where: { id: existingAlert.id },
+              data: {
+                severity: trigger.severity,
+                inputs: trigger.inputs as Prisma.InputJsonValue,
+                updatedAt: new Date(),
+              },
+            });
+          } else {
+            // Create new alert
+            await tx.alert.create({
+              data: {
+                patientId,
+                ruleId: rule.id,
+                ruleName: rule.name,
+                severity: trigger.severity,
+                inputs: trigger.inputs as Prisma.InputJsonValue,
+              },
+            });
+          }
+        });
       }
     } catch (error) {
       console.error(`Error evaluating rule ${rule.id}:`, error);
     }
   }
+}
+
+/**
+ * Legacy function for backward compatibility
+ * @deprecated Use evaluateRulesAtomic instead
+ */
+export async function evaluateRules(
+  patientId: string,
+  measurementType: MeasurementType
+): Promise<void> {
+  return evaluateRulesAtomic(patientId, measurementType);
 }
 
 // ============================================

@@ -133,14 +133,17 @@ model Measurement {
   timestamp  DateTime        @default(now())
   type       MeasurementType
   value      Decimal         @db.Decimal(10, 2)
-  unit       String
+  unit       String          // Always stored in canonical units (kg, mmHg, %, bpm)
+  inputUnit  String?         // Original unit submitted by user/device
   source     String          @default("manual") // manual, withings, etc.
   externalId String?         // vendor's record ID for dedup
   createdAt  DateTime        @default(now())
 
   patient Patient @relation(fields: [patientId], references: [id])
 
+  @@unique([source, externalId], name: "device_dedup") // Prevent device duplicates
   @@index([patientId, type, timestamp])
+  @@index([patientId, type, source, timestamp]) // For manual dedup window check
   @@map("measurements")
 }
 
