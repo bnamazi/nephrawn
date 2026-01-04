@@ -97,3 +97,34 @@ export const METRIC_CONFIG: Record<MetricType, { label: string; icon: string; co
   'SPO2': { label: 'SpO2', icon: 'lungs', color: 'purple' },
   'HEART_RATE': { label: 'Heart Rate', icon: 'activity', color: 'orange' },
 };
+
+// Alert types
+export type AlertSeverity = 'INFO' | 'WARNING' | 'CRITICAL';
+export type AlertStatus = 'OPEN' | 'ACKNOWLEDGED' | 'DISMISSED';
+
+export interface Alert {
+  id: string;
+  patientId: string;
+  triggeredAt: string;
+  ruleId: string;
+  ruleName: string;
+  severity: AlertSeverity;
+  status: AlertStatus;
+  inputs: Record<string, unknown>;
+  summaryText?: string;
+  acknowledgedBy?: string;
+  acknowledgedAt?: string;
+  patient: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  clinician?: {
+    id: string;
+    name: string;
+  };
+}
+
+export interface AlertsResponse {
+  alerts: Alert[];
+}
