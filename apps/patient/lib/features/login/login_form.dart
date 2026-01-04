@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/utils/validators.dart';
 import '../../core/widgets/primary_button.dart';
 
 /// Login form widget with email and password fields
@@ -83,15 +84,7 @@ class _LoginFormState extends State<LoginForm> {
               labelText: 'Email',
               prefixIcon: Icon(Icons.email_outlined),
             ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter your email';
-              }
-              if (!value.contains('@')) {
-                return 'Please enter a valid email';
-              }
-              return null;
-            },
+            validator: Validators.email,
           ),
           const SizedBox(height: 16),
 

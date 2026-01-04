@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { api, ApiError } from '@/lib/api';
 import { ClinicianNote, NotesResponse, NoteResponse } from '@/lib/types';
 import NoteCard from '@/components/NoteCard';
@@ -13,6 +14,7 @@ export default function NotesPage() {
   const router = useRouter();
   const params = useParams();
   const { user, isAuthenticated } = useAuth();
+  const { showToast } = useToast();
   const patientId = params.id as string;
 
   const [notes, setNotes] = useState<ClinicianNote[]>([]);
@@ -55,7 +57,7 @@ export default function NotesPage() {
       setNotes((prev) => [response.note, ...prev]);
       setShowForm(false);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to create note');
+      showToast(err instanceof Error ? err.message : 'Failed to create note', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -68,7 +70,7 @@ export default function NotesPage() {
         prev.map((note) => (note.id === noteId ? response.note : note))
       );
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update note');
+      showToast(err instanceof Error ? err.message : 'Failed to update note', 'error');
       throw err;
     }
   };
@@ -78,7 +80,7 @@ export default function NotesPage() {
       await api.delete(`/clinician/notes/${noteId}`);
       setNotes((prev) => prev.filter((note) => note.id !== noteId));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete note');
+      showToast(err instanceof Error ? err.message : 'Failed to delete note', 'error');
       throw err;
     }
   };

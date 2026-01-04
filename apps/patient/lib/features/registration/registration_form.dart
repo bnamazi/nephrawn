@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/validators.dart';
 import '../../core/widgets/primary_button.dart';
 
 /// Registration form widget with email, password, name, and DOB fields
@@ -28,15 +29,18 @@ class _RegistrationFormState extends State<RegistrationForm> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   final _nameController = TextEditingController();
   final _dobController = TextEditingController();
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   DateTime? _selectedDate;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _nameController.dispose();
     _dobController.dispose();
     super.dispose();
@@ -116,12 +120,7 @@ class _RegistrationFormState extends State<RegistrationForm> {
               labelText: 'Full Name',
               prefixIcon: Icon(Icons.person_outlined),
             ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter your name';
-              }
-              return null;
-            },
+            validator: Validators.name,
           ),
           const SizedBox(height: 16),
 
@@ -136,15 +135,7 @@ class _RegistrationFormState extends State<RegistrationForm> {
               labelText: 'Email',
               prefixIcon: Icon(Icons.email_outlined),
             ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter your email';
-              }
-              if (!value.contains('@')) {
-                return 'Please enter a valid email';
-              }
-              return null;
-            },
+            validator: Validators.email,
           ),
           const SizedBox(height: 16),
 
@@ -157,7 +148,8 @@ class _RegistrationFormState extends State<RegistrationForm> {
             decoration: InputDecoration(
               labelText: 'Password',
               prefixIcon: const Icon(Icons.lock_outlined),
-              helperText: 'At least 8 characters',
+              helperText: 'Min 8 chars with uppercase, lowercase, and number',
+              helperMaxLines: 2,
               suffixIcon: IconButton(
                 icon: Icon(
                   _obscurePassword ? Icons.visibility : Icons.visibility_off,
@@ -169,15 +161,31 @@ class _RegistrationFormState extends State<RegistrationForm> {
                 },
               ),
             ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter a password';
-              }
-              if (value.length < 8) {
-                return 'Password must be at least 8 characters';
-              }
-              return null;
-            },
+            validator: Validators.password,
+          ),
+          const SizedBox(height: 16),
+
+          // Confirm Password field
+          TextFormField(
+            controller: _confirmPasswordController,
+            obscureText: _obscureConfirmPassword,
+            textInputAction: TextInputAction.next,
+            enabled: !widget.isLoading,
+            decoration: InputDecoration(
+              labelText: 'Confirm Password',
+              prefixIcon: const Icon(Icons.lock_outlined),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscureConfirmPassword ? Icons.visibility : Icons.visibility_off,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscureConfirmPassword = !_obscureConfirmPassword;
+                  });
+                },
+              ),
+            ),
+            validator: Validators.confirmPassword(_passwordController.text),
           ),
           const SizedBox(height: 16),
 

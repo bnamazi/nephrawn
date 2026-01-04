@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/models/blood_pressure.dart';
 import '../../routes/router.dart';
 import 'bp_chart.dart';
 import 'bp_list.dart';
@@ -240,19 +241,25 @@ class _BPHistoryScreenContent extends StatelessWidget {
 }
 
 class _BPHistoryItem extends StatelessWidget {
-  final dynamic reading;
+  final BloodPressureReading reading;
 
   const _BPHistoryItem({required this.reading});
 
+  /// Color based on AHA blood pressure category severity
   Color _getCategoryColor() {
-    if (reading.systolic < 120 && reading.diastolic < 80) {
-      return Colors.green;
-    } else if (reading.systolic < 130 && reading.diastolic < 80) {
-      return Colors.amber;
-    } else if (reading.systolic < 140 || reading.diastolic < 90) {
-      return Colors.orange;
-    } else {
-      return Colors.red;
+    switch (reading.severityLevel) {
+      case 0: // Normal
+        return Colors.green;
+      case 1: // Elevated
+        return Colors.amber;
+      case 2: // Stage 1
+        return Colors.orange;
+      case 3: // Stage 2
+        return Colors.red;
+      case 4: // Crisis
+        return Colors.red.shade900;
+      default:
+        return Colors.grey;
     }
   }
 

@@ -52,27 +52,36 @@ class ApiClient {
 }
 
 /// Interceptor to attach JWT token to requests
-class _AuthInterceptor extends Interceptor {
+/// Uses QueuedInterceptor to properly handle async token fetching
+/// This prevents race conditions where requests could be sent before token is attached
+class _AuthInterceptor extends QueuedInterceptor {
   final SecureStorageService _storage;
   final void Function() _onAuthFailure;
 
   _AuthInterceptor(this._storage, this._onAuthFailure);
 
   @override
-  void onRequest(
+  Future<void> onRequest(
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
     // Skip auth header for login/register endpoints
     if (options.path.contains('/auth/')) {
-      return handler.next(options);
+      handler.next(options);
+      return;
     }
 
-    final token = await _storage.getToken();
-    if (token != null) {
-      options.headers['Authorization'] = 'Bearer $token';
+    try {
+      final token = await _storage.getToken();
+      if (token != null) {
+        options.headers['Authorization'] = 'Bearer $token';
+      }
+      handler.next(options);
+    } catch (e) {
+      // If token fetch fails, proceed without auth header
+      // The request will fail with 401 if auth is required
+      handler.next(options);
     }
-    handler.next(options);
   }
 
   @override

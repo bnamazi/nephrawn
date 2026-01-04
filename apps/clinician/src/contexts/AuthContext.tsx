@@ -1,7 +1,7 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { api, setToken, clearToken } from '@/lib/api';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { api, setToken, clearToken, getToken } from '@/lib/api';
 
 interface User {
   id: string;
@@ -15,10 +15,15 @@ interface LoginResponse {
   user: User;
 }
 
+interface MeResponse {
+  clinician: User;
+}
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isInitialized: boolean; // True once session restoration check is complete
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -27,7 +32,35 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  // Start with loading=true to check for existing session
+  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Restore session on app load
+  useEffect(() => {
+    async function restoreSession() {
+      const token = getToken();
+      if (!token) {
+        setIsLoading(false);
+        setIsInitialized(true);
+        return;
+      }
+
+      try {
+        // Verify token is still valid by fetching user profile
+        const response = await api.get<MeResponse>('/clinician/me');
+        setUser(response.clinician);
+      } catch {
+        // Token is invalid or expired, clear it
+        clearToken();
+      } finally {
+        setIsLoading(false);
+        setIsInitialized(true);
+      }
+    }
+
+    restoreSession();
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
@@ -52,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     isAuthenticated: user !== null,
     isLoading,
+    isInitialized,
     login,
     logout,
   };

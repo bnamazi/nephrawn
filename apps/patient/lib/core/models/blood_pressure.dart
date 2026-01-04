@@ -21,13 +21,23 @@ class BloodPressureReading {
   }
 
   /// Blood pressure category based on AHA guidelines
+  /// https://www.heart.org/en/health-topics/high-blood-pressure/understanding-blood-pressure-readings
   String get category {
-    if (systolic < 120 && diastolic < 80) return 'Normal';
-    if (systolic < 130 && diastolic < 80) return 'Elevated';
-    if (systolic < 140 || diastolic < 90) return 'High (Stage 1)';
-    if (systolic >= 140 || diastolic >= 90) return 'High (Stage 2)';
+    // Check from highest severity to lowest
     if (systolic > 180 || diastolic > 120) return 'Crisis';
-    return 'Unknown';
+    if (systolic >= 140 || diastolic >= 90) return 'High (Stage 2)';
+    if (systolic >= 130 || diastolic >= 80) return 'High (Stage 1)';
+    if (systolic >= 120 && diastolic < 80) return 'Elevated';
+    return 'Normal';
+  }
+
+  /// Severity level for color coding (0=normal, 1=elevated, 2=stage1, 3=stage2, 4=crisis)
+  int get severityLevel {
+    if (systolic > 180 || diastolic > 120) return 4;
+    if (systolic >= 140 || diastolic >= 90) return 3;
+    if (systolic >= 130 || diastolic >= 80) return 2;
+    if (systolic >= 120 && diastolic < 80) return 1;
+    return 0;
   }
 
   /// Whether this reading indicates high blood pressure
