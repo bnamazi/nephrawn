@@ -4,6 +4,7 @@ import '../core/auth/auth_provider.dart';
 import '../features/login/login_screen.dart';
 import '../features/registration/registration_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/dashboard/dashboard_screen.dart';
 import '../features/weight_history/weight_history_screen.dart';
 import '../features/weight_entry/weight_entry_screen.dart';
 import '../features/blood_pressure/bp_history_screen.dart';
@@ -15,6 +16,7 @@ class Routes {
   static const String register = '/register';
   static const String home = '/';
   static const String profile = '/profile';
+  static const String weight = '/weight';
   static const String addWeight = '/add-weight';
   static const String bp = '/bp';
   static const String addBP = '/add-bp';
@@ -59,11 +61,15 @@ GoRouter createRouter(AuthProvider authProvider) {
       ),
       GoRoute(
         path: Routes.home,
-        builder: (context, state) => const WeightHistoryScreen(),
+        builder: (context, state) => const DashboardScreen(),
       ),
       GoRoute(
         path: Routes.profile,
         builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: Routes.weight,
+        builder: (context, state) => const WeightHistoryScreen(),
       ),
       GoRoute(
         path: Routes.bp,

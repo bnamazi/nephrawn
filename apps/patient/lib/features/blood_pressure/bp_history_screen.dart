@@ -91,13 +91,26 @@ class _BPHistoryScreenContent extends StatelessWidget {
         ],
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: 1,
+        selectedIndex: 2,
         onDestinationSelected: (index) {
-          if (index == 0) {
-            context.go(Routes.home);
+          switch (index) {
+            case 0:
+              context.go(Routes.home);
+              break;
+            case 1:
+              context.go(Routes.weight);
+              break;
+            case 2:
+              // Already on BP
+              break;
           }
         },
         destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
           NavigationDestination(
             icon: Icon(Icons.monitor_weight_outlined),
             selectedIcon: Icon(Icons.monitor_weight),

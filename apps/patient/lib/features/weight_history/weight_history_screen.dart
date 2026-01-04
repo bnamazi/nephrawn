@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../routes/router.dart';
+import 'weight_chart.dart';
 import 'weight_history_provider.dart';
 import 'weight_list.dart';
 
@@ -123,10 +124,59 @@ class _WeightHistoryScreenContent extends StatelessWidget {
             );
           }
 
-          // Data loaded
-          return WeightList(
-            measurements: provider.measurements,
+          // Data loaded - show chart and list
+          return RefreshIndicator(
             onRefresh: provider.refresh,
+            child: CustomScrollView(
+              slivers: [
+                // Chart section
+                SliverToBoxAdapter(
+                  child: Card(
+                    margin: const EdgeInsets.all(16),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Trend',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          WeightChart(
+                            measurements: provider.measurements.take(10).toList().reversed.toList(),
+                            height: 180,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // List header
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'History',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                ),
+                // List items
+                SliverPadding(
+                  padding: const EdgeInsets.all(16),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final measurement = provider.measurements[index];
+                        return _WeightHistoryItem(measurement: measurement);
+                      },
+                      childCount: provider.measurements.length,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),
@@ -141,13 +191,26 @@ class _WeightHistoryScreenContent extends StatelessWidget {
         label: const Text('Add Weight'),
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
+        selectedIndex: 1,
         onDestinationSelected: (index) {
-          if (index == 1) {
-            context.go(Routes.bp);
+          switch (index) {
+            case 0:
+              context.go(Routes.home);
+              break;
+            case 1:
+              // Already on weight
+              break;
+            case 2:
+              context.go(Routes.bp);
+              break;
           }
         },
         destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
           NavigationDestination(
             icon: Icon(Icons.monitor_weight_outlined),
             selectedIcon: Icon(Icons.monitor_weight),
@@ -161,5 +224,56 @@ class _WeightHistoryScreenContent extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _WeightHistoryItem extends StatelessWidget {
+  final dynamic measurement;
+
+  const _WeightHistoryItem({required this.measurement});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            Icons.monitor_weight,
+            color: Theme.of(context).primaryColor,
+            size: 20,
+          ),
+        ),
+        title: Text(
+          '${measurement.displayValue.toStringAsFixed(1)} ${measurement.displayUnit}',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          _formatDate(measurement.timestamp),
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    } else if (diff.inDays < 7) {
+      return '${diff.inDays}d ago';
+    } else {
+      return '${date.month}/${date.day}/${date.year}';
+    }
   }
 }
