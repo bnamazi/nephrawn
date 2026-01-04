@@ -40,9 +40,56 @@
 - Patient/Clinician/Enrollment CRUD
 - SymptomCheckin and Measurement ingestion
 - Alert generation (rule engine)
-- Note management
+- Clinician Notes
 - Interaction logging (RPM/CCM)
 - Time-series query endpoints
+
+---
+
+## Current API Surface
+
+### Authentication (`/auth`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/patient/register` | Register new patient |
+| POST | `/auth/patient/login` | Patient login → JWT |
+| POST | `/auth/clinician/login` | Clinician login → JWT |
+
+### Patient Routes (`/patient`) — requires patient role
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/patient/me` | Get own profile |
+| POST | `/patient/checkins` | Submit symptom check-in |
+| GET | `/patient/checkins` | List own check-ins |
+| POST | `/patient/measurements` | Submit single measurement |
+| POST | `/patient/measurements/blood-pressure` | Submit BP pair (systolic + diastolic) |
+| GET | `/patient/measurements` | List own measurements |
+| GET | `/patient/alerts` | List own alerts |
+| GET | `/patient/dashboard` | Dashboard overview (all summaries) |
+| GET | `/patient/charts/:type` | Time-series data for charting |
+| GET | `/patient/summary/:type` | Measurement summary with trend |
+
+### Clinician Routes (`/clinician`) — requires clinician/admin role
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/clinician/me` | Get own profile |
+| GET | `/clinician/patients` | List enrolled patients |
+| GET | `/clinician/patients/:patientId` | Get patient details |
+| GET | `/clinician/patients/:patientId/checkins` | Patient's check-ins |
+| GET | `/clinician/patients/:patientId/measurements` | Patient's measurements |
+| GET | `/clinician/patients/:patientId/dashboard` | Patient dashboard overview |
+| GET | `/clinician/patients/:patientId/charts/:type` | Patient time-series data |
+| GET | `/clinician/patients/:patientId/summary/:type` | Patient measurement summary |
+| GET | `/clinician/patients/:patientId/notes` | Patient's notes |
+| POST | `/clinician/patients/:patientId/notes` | Create note for patient |
+| GET | `/clinician/alerts` | All alerts for enrolled patients |
+| GET | `/clinician/alerts/:alertId` | Single alert details |
+| POST | `/clinician/alerts/:alertId/acknowledge` | Acknowledge alert |
+| POST | `/clinician/alerts/:alertId/dismiss` | Dismiss alert |
+| GET | `/clinician/alerts/:alertId/notes` | Notes attached to alert |
+| GET | `/clinician/notes/:noteId` | Get single note |
+| PUT | `/clinician/notes/:noteId` | Update note (author only) |
+| DELETE | `/clinician/notes/:noteId` | Delete note (author only) |
 
 ### Patient App (MVP)
 - Login / session management
@@ -99,6 +146,45 @@
 2. Background job polls vendor API
 3. Normalized Measurement entities created with `source = 'withings'`
 4. Same rule engine evaluates data
+
+---
+
+## Time-Series API Guarantees
+
+The `/charts/:type` and `/summary/:type` endpoints provide frontend-ready data with predictable behavior:
+
+### Response Structure
+All time-series responses include:
+- `type` — Measurement type (WEIGHT, BP_SYSTOLIC, etc.)
+- `unit` — Canonical storage unit
+- `displayUnit` — Unit for display (may differ from storage)
+- `range.from` / `range.to` — Actual query range
+- `meta.timezone` — Timezone used for bucketing (default: UTC)
+
+### Guardrails
+| Parameter | Default | Maximum | Notes |
+|-----------|---------|---------|-------|
+| limit | 200 | 2000 | Points per query |
+| from | 30 days ago | — | Default lookback |
+| to | now | — | Upper bound |
+| aggregate range | 90 days | 365 days | Daily aggregates capped |
+
+### Trend Calculation
+Summary endpoints compute trend using clinical thresholds:
+- Requires **4+ data points** AND **24+ hour time span**
+- Compares recent half vs older half averages
+- Uses clinically significant thresholds (not arbitrary percentages):
+  - Weight: 1 kg
+  - BP: 10 mmHg (systolic), 5 mmHg (diastolic)
+  - SpO2: 2%
+  - Heart Rate: 10 bpm
+- Returns `insufficient_data` if criteria not met
+
+### Blood Pressure Pairing
+BP is stored as separate systolic/diastolic measurements:
+- Paired within 60-second window
+- Response includes `meta.unpairedSystolicCount` and `meta.unpairedDiastolicCount`
+- Frontend receives ready-to-chart `{timestamp, systolic, diastolic}` points
 
 ---
 

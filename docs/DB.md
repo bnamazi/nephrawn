@@ -76,11 +76,23 @@ The schema prioritizes:
 | patientId | UUID | FK → Patient |
 | timestamp | timestamp | When measured |
 | type | enum | weight, bp_systolic, bp_diastolic, spo2, heart_rate |
-| value | decimal | Numeric value |
-| unit | string | lbs, kg, mmHg, %, bpm |
+| value | decimal(10,2) | Numeric value in **canonical units** |
+| unit | string | Always canonical: kg, mmHg, %, bpm |
+| inputUnit | string | Nullable; original unit if conversion occurred (e.g., "lbs") |
 | source | string | 'manual', 'withings', future vendors |
 | externalId | string | Nullable; vendor's record ID for dedup |
 | createdAt | timestamp | |
+
+**Canonical Units**: All measurements are stored in canonical units for consistency:
+- WEIGHT → kg (lbs converted at ingestion)
+- BP_SYSTOLIC, BP_DIASTOLIC → mmHg
+- SPO2 → %
+- HEART_RATE → bpm
+
+**Constraints**:
+- `@@unique([source, externalId])` — Prevents device duplicate imports
+- `@@index([patientId, type, timestamp])` — Time-series queries
+- `@@index([patientId, type, source, timestamp])` — Manual dedup window checks
 
 ### Alert
 | Field | Type | Notes |
@@ -99,28 +111,37 @@ The schema prioritizes:
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
 
-**inputs JSONB structure** (example):
+**inputs JSONB structure** (example for weight_gain_48h):
 ```json
 {
   "measurements": [
-    { "id": "uuid1", "value": 185, "timestamp": "..." },
-    { "id": "uuid2", "value": 190, "timestamp": "..." }
+    { "id": "uuid1", "value": 83.91, "unit": "kg", "timestamp": "..." },
+    { "id": "uuid2", "value": 85.27, "unit": "kg", "timestamp": "..." }
   ],
-  "delta": 5,
-  "threshold": 3,
+  "oldestValue": 83.91,
+  "newestValue": 85.27,
+  "delta": 1.36,
+  "thresholdKg": 1.36,
   "windowHours": 48
 }
 ```
 
-### Note
+**Alert De-duplication**: When a rule triggers and an OPEN alert already exists for the same (patientId, ruleId), the existing alert is **updated** with new inputs rather than creating a duplicate. This prevents alert spam for ongoing conditions.
+
+### ClinicianNote
 | Field | Type | Notes |
 |-------|------|-------|
 | id | UUID | Primary key |
-| enrollmentId | UUID | FK → Enrollment |
-| authorId | UUID | FK → Clinician |
+| patientId | UUID | FK → Patient |
+| clinicianId | UUID | FK → Clinician |
+| alertId | UUID | Nullable; FK → Alert (attach note to specific alert) |
 | content | text | Note body |
-| linkedAlertId | UUID | Nullable; FK → Alert |
 | createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+**Indexes**:
+- `@@index([patientId, createdAt])` — Patient timeline queries
+- `@@index([alertId])` — Notes by alert
 
 ### InteractionLog (RPM/CCM)
 | Field | Type | Notes |
@@ -152,12 +173,14 @@ Patient ─────┬───── many SymptomCheckins
              ├───── many Measurements
              ├───── many Alerts
              ├───── many InteractionLogs
+             ├───── many ClinicianNotes
              └───── many Enrollments ───── Clinician
-                           │
-                           └───── many Notes
 
-Alert ─────── optional Note (via linkedAlertId)
-Clinician ─── many InteractionLogs
+Clinician ───┬───── many InteractionLogs
+             ├───── many ClinicianNotes
+             └───── many Alerts (via acknowledgedBy)
+
+Alert ─────── many ClinicianNotes (via alertId)
 ```
 
 ---
@@ -225,6 +248,25 @@ Clinician ─── many InteractionLogs
 
 ---
 
+## Measurement Deduplication Strategy
+
+Two-layer deduplication prevents duplicate data from corrupting trends:
+
+### Device Duplicates
+- **Mechanism**: `@@unique([source, externalId])` constraint
+- **Behavior**: If a device syncs the same reading twice, the unique constraint prevents insertion
+- **Handling**: API returns existing measurement with `isDuplicate: true`
+
+### Manual Duplicates
+- **Mechanism**: 5-minute time window + 0.1% value tolerance
+- **Behavior**: If patient submits similar value within window, treated as duplicate
+- **Thresholds**:
+  - Time window: 5 minutes before/after timestamp
+  - Value tolerance: max(0.1% of value, 0.1 absolute)
+- **Handling**: API returns existing measurement with `isDuplicate: true`
+
+---
+
 ## Design Decisions
 
 | Decision | Rationale |
@@ -235,3 +277,7 @@ Clinician ─── many InteractionLogs
 | source + externalId on Measurement | Device integration without breaking changes |
 | isPrimary on Enrollment | Multi-clinician support without restructure |
 | preferences JSONB on Patient | Avoids migrations for settings changes |
+| Canonical units for Measurement | Consistent storage; convert at boundaries |
+| inputUnit preserves original | Audit trail of what user submitted |
+| Alert update vs create | Prevents alert spam for ongoing conditions |
+| Transaction for Measurement + Log | Atomicity; no orphaned records |
