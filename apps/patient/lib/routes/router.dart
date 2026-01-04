@@ -11,6 +11,7 @@ import '../features/blood_pressure/bp_history_screen.dart';
 import '../features/blood_pressure/bp_entry_screen.dart';
 import '../features/symptom_checkin/symptom_checkin_screen.dart';
 import '../features/symptom_checkin/symptom_entry_screen.dart';
+import '../features/alerts/alerts_screen.dart';
 
 /// Route paths
 class Routes {
@@ -24,6 +25,7 @@ class Routes {
   static const String addBP = '/add-bp';
   static const String checkins = '/checkins';
   static const String addCheckin = '/add-checkin';
+  static const String alerts = '/alerts';
 }
 
 /// Create app router with auth guards
@@ -94,6 +96,10 @@ GoRouter createRouter(AuthProvider authProvider) {
       GoRoute(
         path: Routes.addCheckin,
         builder: (context, state) => const SymptomEntryScreen(),
+      ),
+      GoRoute(
+        path: Routes.alerts,
+        builder: (context, state) => const AlertsScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

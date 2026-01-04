@@ -7,6 +7,8 @@ import '../../core/models/dashboard.dart';
 import '../../routes/router.dart';
 import 'dashboard_provider.dart';
 import 'widgets/metric_card.dart';
+import 'widgets/recent_alerts_section.dart';
+import 'widgets/recent_checkins_section.dart';
 
 /// Main dashboard screen showing health metrics overview
 class DashboardScreen extends StatelessWidget {
@@ -190,6 +192,25 @@ class _DashboardScreenContent extends StatelessWidget {
                         iconColor: Colors.orange.shade600,
                       ),
                     ],
+                  ),
+
+                  // Recent Alerts Section
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  RecentAlertsSection(
+                    alerts: provider.recentAlerts,
+                    onViewAll: () => context.push(Routes.alerts),
+                  ),
+
+                  // Recent Check-ins Section
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  RecentCheckinsSection(
+                    checkins: provider.recentCheckins,
+                    onViewAll: () => context.go(Routes.checkins),
+                    onAddCheckin: () => context.push(Routes.addCheckin),
                   ),
 
                   // Last updated
