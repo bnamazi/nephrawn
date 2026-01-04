@@ -103,6 +103,9 @@ class _BPHistoryScreenContent extends StatelessWidget {
             case 2:
               // Already on BP
               break;
+            case 3:
+              context.go(Routes.checkins);
+              break;
           }
         },
         destinations: const [
@@ -119,7 +122,12 @@ class _BPHistoryScreenContent extends StatelessWidget {
           NavigationDestination(
             icon: Icon(Icons.favorite_outline),
             selectedIcon: Icon(Icons.favorite),
-            label: 'Blood Pressure',
+            label: 'BP',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.medical_information_outlined),
+            selectedIcon: Icon(Icons.medical_information),
+            label: 'Symptoms',
           ),
         ],
       ),

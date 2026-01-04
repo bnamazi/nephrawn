@@ -203,6 +203,9 @@ class _WeightHistoryScreenContent extends StatelessWidget {
             case 2:
               context.go(Routes.bp);
               break;
+            case 3:
+              context.go(Routes.checkins);
+              break;
           }
         },
         destinations: const [
@@ -219,7 +222,12 @@ class _WeightHistoryScreenContent extends StatelessWidget {
           NavigationDestination(
             icon: Icon(Icons.favorite_outline),
             selectedIcon: Icon(Icons.favorite),
-            label: 'Blood Pressure',
+            label: 'BP',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.medical_information_outlined),
+            selectedIcon: Icon(Icons.medical_information),
+            label: 'Symptoms',
           ),
         ],
       ),
