@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import cors from "cors";
 import { config } from "./lib/config.js";
 import authRoutes from "./routes/auth.routes.js";
 import clinicianRoutes from "./routes/clinician.routes.js";
@@ -8,6 +9,10 @@ import patientRoutes from "./routes/patient.routes.js";
 const app = express();
 
 // Middleware
+app.use(cors({
+  origin: ['http://localhost:3001', 'http://127.0.0.1:3001'],
+  credentials: true,
+}));
 app.use(express.json());
 
 // Health check
