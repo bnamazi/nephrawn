@@ -147,10 +147,7 @@ export default function PatientsPage() {
           <PatientCard
             key={patient.id}
             patient={patient}
-            onClick={() => {
-              // Future: navigate to patient detail
-              // router.push(`/patients/${patient.id}`);
-            }}
+            onClick={() => router.push(`/patients/${patient.id}`)}
           />
         ))}
       </div>

@@ -1,0 +1,99 @@
+// Patient types
+export interface Patient {
+  id: string;
+  name: string;
+  email: string;
+  dateOfBirth: string;
+  preferences?: Record<string, unknown>;
+}
+
+export interface Enrollment {
+  id: string;
+  status: 'ACTIVE' | 'DISCHARGED';
+  isPrimary: boolean;
+  enrolledAt: string;
+}
+
+export interface PatientWithEnrollment {
+  patient: Patient;
+  enrollment: Enrollment;
+}
+
+// Dashboard types
+export interface MeasurementSummary {
+  type: string;
+  unit: string;
+  displayUnit: string;
+  latest: { value: number; timestamp: string } | null;
+  stats: { min: number; max: number; avg: number; count: number } | null;
+  trend: 'increasing' | 'decreasing' | 'stable' | 'insufficient_data';
+}
+
+export interface Dashboard {
+  weight: MeasurementSummary;
+  bloodPressure: {
+    systolic: MeasurementSummary;
+    diastolic: MeasurementSummary;
+  };
+  spo2: MeasurementSummary;
+  heartRate: MeasurementSummary;
+  meta: { timezone: string; generatedAt: string };
+}
+
+export interface DashboardResponse {
+  dashboard: Dashboard;
+}
+
+// Chart types
+export interface ChartPoint {
+  timestamp: string;
+  value: number;
+}
+
+export interface BloodPressureChartPoint {
+  timestamp: string;
+  systolic: number;
+  diastolic: number;
+}
+
+export interface ChartData {
+  type: string;
+  unit: string;
+  displayUnit: string;
+  points: ChartPoint[];
+  range: { from: string; to: string };
+  meta: { timezone: string; totalCount: number; returnedCount: number; hasMore: boolean };
+}
+
+export interface BloodPressureChartData {
+  unit: string;
+  points: BloodPressureChartPoint[];
+  range: { from: string; to: string };
+  meta: {
+    timezone: string;
+    pairingWindowMs: number;
+    pairedCount: number;
+    unpairedSystolicCount: number;
+    unpairedDiastolicCount: number;
+  };
+}
+
+export interface ChartResponse {
+  data: ChartData | null;
+  message?: string;
+}
+
+export interface BloodPressureChartResponse {
+  data: BloodPressureChartData | null;
+  message?: string;
+}
+
+// Metric types for display
+export type MetricType = 'WEIGHT' | 'blood-pressure' | 'SPO2' | 'HEART_RATE';
+
+export const METRIC_CONFIG: Record<MetricType, { label: string; icon: string; color: string }> = {
+  'WEIGHT': { label: 'Weight', icon: 'scale', color: 'blue' },
+  'blood-pressure': { label: 'Blood Pressure', icon: 'heart', color: 'red' },
+  'SPO2': { label: 'SpO2', icon: 'lungs', color: 'purple' },
+  'HEART_RATE': { label: 'Heart Rate', icon: 'activity', color: 'orange' },
+};
