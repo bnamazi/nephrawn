@@ -128,3 +128,32 @@ export interface Alert {
 export interface AlertsResponse {
   alerts: Alert[];
 }
+
+// Note types
+export interface ClinicianNote {
+  id: string;
+  patientId: string;
+  clinicianId: string;
+  alertId?: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  clinician: {
+    id: string;
+    name: string;
+  };
+  alert?: {
+    id: string;
+    ruleId: string;
+    ruleName: string;
+    severity: AlertSeverity;
+  };
+}
+
+export interface NotesResponse {
+  notes: ClinicianNote[];
+}
+
+export interface NoteResponse {
+  note: ClinicianNote;
+}

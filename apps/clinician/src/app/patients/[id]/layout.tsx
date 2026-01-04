@@ -15,6 +15,7 @@ interface PatientLayoutProps {
 const TABS = [
   { label: 'Overview', href: '' },
   { label: 'Measurements', href: '/measurements' },
+  { label: 'Notes', href: '/notes' },
 ];
 
 export default function PatientLayout({ children }: PatientLayoutProps) {
