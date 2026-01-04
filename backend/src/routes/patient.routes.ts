@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { MeasurementType } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { logger } from "../lib/logger.js";
 import { authenticate, requireRole } from "../middleware/auth.middleware.js";
 import { symptomCheckinSchema, measurementSchema, bloodPressureSchema } from "../lib/validation.js";
 import { createCheckin, getCheckinsByPatient } from "../services/checkin.service.js";
@@ -65,7 +66,7 @@ router.post("/checkins", async (req: Request, res: Response) => {
 
     res.status(201).json({ checkin });
   } catch (error) {
-    console.error("Checkin error:", error);
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to create checkin");
     res.status(500).json({ error: "Failed to create check-in" });
   }
 });
@@ -120,7 +121,7 @@ router.post("/measurements", async (req: Request, res: Response) => {
       convertedFrom: result.convertedFrom,
     });
   } catch (error) {
-    console.error("Measurement error:", error);
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to create measurement");
     const message = error instanceof Error ? error.message : "Failed to create measurement";
     res.status(400).json({ error: message });
   }
@@ -165,7 +166,7 @@ router.post("/measurements/blood-pressure", async (req: Request, res: Response) 
       isDuplicate: anyDuplicate,
     });
   } catch (error) {
-    console.error("Blood pressure error:", error);
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to create blood pressure measurement");
     const message = error instanceof Error ? error.message : "Failed to create blood pressure measurement";
     res.status(400).json({ error: message });
   }

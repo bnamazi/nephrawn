@@ -1,41 +1,95 @@
 import "dotenv/config";
-import express from "express";
-import cors from "cors";
+import { app } from "./app.js";
 import { config } from "./lib/config.js";
-import authRoutes from "./routes/auth.routes.js";
-import clinicianRoutes from "./routes/clinician.routes.js";
-import patientRoutes from "./routes/patient.routes.js";
+import { logger } from "./lib/logger.js";
+import { prisma } from "./lib/prisma.js";
 
-const app = express();
+/**
+ * Startup diagnostics - verify critical dependencies
+ */
+async function startupDiagnostics(): Promise<boolean> {
+  logger.info("Running startup diagnostics...");
 
-// Middleware
-app.use(cors({
-  origin: ['http://localhost:3001', 'http://127.0.0.1:3001'],
-  credentials: true,
-}));
-app.use(express.json());
+  // Check database connectivity
+  try {
+    const dbStart = Date.now();
+    await prisma.$queryRaw`SELECT 1`;
+    logger.info(
+      { latencyMs: Date.now() - dbStart },
+      "Database connection verified"
+    );
+  } catch (error) {
+    logger.fatal(
+      { err: error },
+      "Failed to connect to database - server cannot start"
+    );
+    return false;
+  }
 
-// Health check
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+  // Log configuration (non-sensitive)
+  logger.info(
+    {
+      port: config.port,
+      environment: config.isProduction ? "production" : "development",
+      corsOrigins: config.cors.origins,
+    },
+    "Configuration loaded"
+  );
+
+  return true;
+}
+
+/**
+ * Graceful shutdown handler
+ */
+async function gracefulShutdown(signal: string) {
+  logger.info({ signal }, "Shutdown signal received, closing connections...");
+
+  try {
+    await prisma.$disconnect();
+    logger.info("Database connection closed");
+  } catch (error) {
+    logger.error({ err: error }, "Error during database disconnect");
+  }
+
+  process.exit(0);
+}
+
+// Handle shutdown signals
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+// Handle uncaught exceptions
+process.on("uncaughtException", (error) => {
+  logger.fatal({ err: error }, "Uncaught exception - shutting down");
+  process.exit(1);
 });
 
-// Routes
-app.use("/auth", authRoutes);
-app.use("/clinician", clinicianRoutes);
-app.use("/patient", patientRoutes);
-
-// 404 handler
-app.use((_req, res) => {
-  res.status(404).json({ error: "Not found" });
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (reason, promise) => {
+  logger.error(
+    { reason, promise },
+    "Unhandled promise rejection"
+  );
 });
 
-// Error handler
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err);
-  res.status(500).json({ error: "Internal server error" });
-});
+// Start server
+async function main() {
+  const diagnosticsOk = await startupDiagnostics();
 
-app.listen(config.port, () => {
-  console.log(`Server running on http://localhost:${config.port}`);
+  if (!diagnosticsOk) {
+    process.exit(1);
+  }
+
+  app.listen(config.port, () => {
+    logger.info(
+      { port: config.port, url: `http://localhost:${config.port}` },
+      "Server started"
+    );
+  });
+}
+
+main().catch((error) => {
+  logger.fatal({ err: error }, "Failed to start server");
+  process.exit(1);
 });

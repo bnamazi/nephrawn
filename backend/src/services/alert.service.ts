@@ -1,6 +1,7 @@
 import { AlertSeverity, AlertStatus, MeasurementType, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { ALERT_THRESHOLDS } from "../lib/units.js";
+import { logger } from "../lib/logger.js";
 
 // ============================================
 // Alert Rule Definitions
@@ -240,20 +241,12 @@ export async function evaluateRulesAtomic(
         });
       }
     } catch (error) {
-      console.error(`Error evaluating rule ${rule.id}:`, error);
+      logger.error(
+        { err: error, ruleId: rule.id, patientId },
+        `Error evaluating alert rule ${rule.id}`
+      );
     }
   }
-}
-
-/**
- * Legacy function for backward compatibility
- * @deprecated Use evaluateRulesAtomic instead
- */
-export async function evaluateRules(
-  patientId: string,
-  measurementType: MeasurementType
-): Promise<void> {
-  return evaluateRulesAtomic(patientId, measurementType);
 }
 
 // ============================================
