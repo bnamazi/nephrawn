@@ -102,7 +102,7 @@ router.post(
           status: result.invite.status,
           expiresAt: result.invite.expiresAt,
           createdAt: result.invite.createdAt,
-          clinic: result.invite.clinic,
+          clinicId: result.invite.clinicId,
         },
         remainingToday: DAILY_INVITE_LIMIT - todayCount - 1,
       });

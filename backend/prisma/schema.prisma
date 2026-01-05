@@ -64,8 +64,14 @@ model Clinic {
   name      String
   slug      String       @unique // URL-safe identifier
   npi       String?      @unique // National Provider Identifier
+  taxId     String?      // EIN for billing
   address   Json?        // Structured address
   phone     String?
+  fax       String?
+  email     String?      // Clinic contact email
+  website   String?
+  timezone  String       @default("America/New_York")
+  settings  Json?        // Additional configurable settings
   status    ClinicStatus @default(ACTIVE)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
