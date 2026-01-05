@@ -118,6 +118,18 @@ class _ProfileScreenContent extends StatelessWidget {
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+
+                // My Clinics link
+                Card(
+                  child: ListTile(
+                    leading: Icon(Icons.local_hospital_outlined, color: Theme.of(context).primaryColor),
+                    title: const Text('My Clinics'),
+                    subtitle: const Text('View and manage your enrolled clinics'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/clinics'),
+                  ),
+                ),
                 const SizedBox(height: 32),
 
                 // Logout button

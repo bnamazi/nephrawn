@@ -1,3 +1,18 @@
+// Clinic types
+export type ClinicMembershipRole = 'OWNER' | 'ADMIN' | 'CLINICIAN' | 'STAFF';
+
+export interface Clinic {
+  id: string;
+  name: string;
+  slug: string;
+  role: ClinicMembershipRole;
+  joinedAt: string;
+}
+
+export interface ClinicsResponse {
+  clinics: Clinic[];
+}
+
 // Patient types
 export interface Patient {
   id: string;

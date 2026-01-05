@@ -15,6 +15,7 @@ import '../features/alerts/alerts_screen.dart';
 import '../features/join_clinic/join_clinic_screen.dart';
 import '../features/join_clinic/claim_invite_screen.dart';
 import '../features/join_clinic/claim_success_screen.dart';
+import '../features/clinics/clinics_screen.dart';
 
 /// Route paths
 class Routes {
@@ -29,6 +30,8 @@ class Routes {
   static const String checkins = '/checkins';
   static const String addCheckin = '/add-checkin';
   static const String alerts = '/alerts';
+  // Clinics
+  static const String clinics = '/clinics';
   // Invite claim flow
   static const String joinClinic = '/join-clinic';
   static const String claimInvite = '/claim-invite';
@@ -113,6 +116,10 @@ GoRouter createRouter(AuthProvider authProvider) {
       GoRoute(
         path: Routes.alerts,
         builder: (context, state) => const AlertsScreen(),
+      ),
+      GoRoute(
+        path: Routes.clinics,
+        builder: (context, state) => const ClinicsScreen(),
       ),
       GoRoute(
         path: Routes.joinClinic,

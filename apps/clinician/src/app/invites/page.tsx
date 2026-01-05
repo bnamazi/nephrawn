@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useClinic } from '@/contexts/ClinicContext';
 import { api, ApiError } from '@/lib/api';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -19,13 +20,6 @@ interface Invite {
   createdAt: string;
 }
 
-interface Clinic {
-  id: string;
-  name: string;
-  slug: string;
-  role: string;
-}
-
 interface InvitesResponse {
   invites: Invite[];
   pagination: {
@@ -33,10 +27,6 @@ interface InvitesResponse {
     offset: number;
     hasMore: boolean;
   };
-}
-
-interface ClinicsResponse {
-  clinics: Clinic[];
 }
 
 interface InviteResponse {
@@ -51,8 +41,8 @@ interface InviteResponse {
 export default function InvitesPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
+  const { selectedClinic, isLoading: isClinicLoading } = useClinic();
   const [invites, setInvites] = useState<Invite[]>([]);
-  const [clinics, setClinics] = useState<Clinic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [includeExpired, setIncludeExpired] = useState(false);
@@ -64,22 +54,20 @@ export default function InvitesPage() {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [lastInvite, setLastInvite] = useState<InviteResponse | null>(null);
 
-  const primaryClinic = clinics[0];
-
   const fetchData = useCallback(async () => {
+    if (!selectedClinic) {
+      setInvites([]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      const clinicsRes = await api.get<ClinicsResponse>('/clinician/clinics');
-      setClinics(clinicsRes.clinics);
-
-      if (clinicsRes.clinics.length > 0) {
-        const clinicId = clinicsRes.clinics[0].id;
-        const invitesRes = await api.get<InvitesResponse>(
-          `/clinician/clinic/${clinicId}/invites?includeExpired=${includeExpired}`
-        );
-        setInvites(invitesRes.invites);
-      }
+      const invitesRes = await api.get<InvitesResponse>(
+        `/clinician/clinic/${selectedClinic.id}/invites?includeExpired=${includeExpired}`
+      );
+      setInvites(invitesRes.invites);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         router.push('/login');
@@ -89,22 +77,24 @@ export default function InvitesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [router, includeExpired]);
+  }, [router, includeExpired, selectedClinic]);
 
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/login');
       return;
     }
-    fetchData();
-  }, [isAuthenticated, router, fetchData]);
+    if (!isClinicLoading) {
+      fetchData();
+    }
+  }, [isAuthenticated, router, fetchData, isClinicLoading]);
 
   const handleRevoke = async (inviteId: string) => {
-    if (!primaryClinic) return;
+    if (!selectedClinic) return;
 
     setRevoking(inviteId);
     try {
-      await api.delete(`/clinician/clinic/${primaryClinic.id}/invites/${inviteId}`);
+      await api.delete(`/clinician/clinic/${selectedClinic.id}/invites/${inviteId}`);
       // Refresh the list
       await fetchData();
     } catch (err) {
@@ -188,7 +178,7 @@ export default function InvitesPage() {
     return null;
   }
 
-  if (isLoading) {
+  if (isLoading || isClinicLoading) {
     return (
       <div className="flex justify-center items-center min-h-[400px]">
         <div className="flex flex-col items-center gap-4">
@@ -252,7 +242,7 @@ export default function InvitesPage() {
               Manage invite codes for new patient enrollments
             </p>
           </div>
-          {primaryClinic && (
+          {selectedClinic && (
             <Button onClick={() => setIsInviteModalOpen(true)}>
               <span className="flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -299,7 +289,7 @@ export default function InvitesPage() {
                 />
               </svg>
               <p className="mt-4 text-gray-500">No pending invites</p>
-              {primaryClinic && (
+              {selectedClinic && (
                 <Button onClick={() => setIsInviteModalOpen(true)} className="mt-4">
                   Create Your First Invite
                 </Button>
@@ -375,13 +365,13 @@ export default function InvitesPage() {
         )}
       </div>
 
-      {primaryClinic && (
+      {selectedClinic && (
         <>
           <InvitePatientModal
             isOpen={isInviteModalOpen}
             onClose={() => setIsInviteModalOpen(false)}
             onSuccess={handleInviteSuccess}
-            clinicId={primaryClinic.id}
+            clinicId={selectedClinic.id}
           />
           {lastInvite && (
             <InviteSuccessModal

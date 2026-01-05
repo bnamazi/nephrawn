@@ -9,11 +9,15 @@ class ApiEndpoints {
 
   // Patient endpoints
   static const String me = '/patient/me';
+  static const String clinics = '/patient/clinics';
   static const String measurements = '/patient/measurements';
   static const String bloodPressure = '/patient/measurements/blood-pressure';
   static const String checkins = '/patient/checkins';
   static const String alerts = '/patient/alerts';
   static const String dashboard = '/patient/dashboard';
+
+  /// Leave a clinic
+  static String leaveClinic(String clinicId) => '/patient/clinics/$clinicId/leave';
 
   /// Get chart data for a specific type
   static String charts(String type) => '/patient/charts/$type';

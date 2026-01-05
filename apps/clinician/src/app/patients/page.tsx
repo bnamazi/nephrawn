@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useClinic } from '@/contexts/ClinicContext';
 import { api, ApiError } from '@/lib/api';
 import PatientCard from '@/components/PatientCard';
 import Button from '@/components/ui/Button';
@@ -16,21 +17,14 @@ interface Patient {
   dateOfBirth: string;
   enrolledAt: string;
   isPrimary: boolean;
+  clinic: {
+    id: string;
+    name: string;
+  };
 }
 
 interface PatientsResponse {
   patients: Patient[];
-}
-
-interface Clinic {
-  id: string;
-  name: string;
-  slug: string;
-  role: string;
-}
-
-interface ClinicsResponse {
-  clinics: Clinic[];
 }
 
 interface InviteResponse {
@@ -45,8 +39,8 @@ interface InviteResponse {
 export default function PatientsPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
+  const { selectedClinic, isLoading: isClinicLoading } = useClinic();
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [clinics, setClinics] = useState<Clinic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,15 +50,20 @@ export default function PatientsPage() {
   const [lastInvite, setLastInvite] = useState<InviteResponse | null>(null);
 
   const fetchPatients = useCallback(async () => {
+    if (!selectedClinic) {
+      setPatients([]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      const [patientsRes, clinicsRes] = await Promise.all([
-        api.get<PatientsResponse>('/clinician/patients'),
-        api.get<ClinicsResponse>('/clinician/clinics'),
-      ]);
-      setPatients(patientsRes.patients);
-      setClinics(clinicsRes.clinics);
+      // Filter patients by selected clinic
+      const response = await api.get<PatientsResponse>(
+        `/clinician/patients?clinicId=${selectedClinic.id}`
+      );
+      setPatients(response.patients);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         router.push('/login');
@@ -74,19 +73,23 @@ export default function PatientsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [router]);
+  }, [router, selectedClinic]);
 
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/login');
       return;
     }
-    fetchPatients();
-  }, [isAuthenticated, router, fetchPatients]);
+    if (!isClinicLoading) {
+      fetchPatients();
+    }
+  }, [isAuthenticated, router, fetchPatients, isClinicLoading]);
 
   const handleInviteSuccess = (invite: InviteResponse) => {
     setLastInvite(invite);
     setIsSuccessModalOpen(true);
+    // Refresh patient list after invite
+    fetchPatients();
   };
 
   const handleSuccessClose = () => {
@@ -94,16 +97,13 @@ export default function PatientsPage() {
     setLastInvite(null);
   };
 
-  // Get the first clinic (for MVP, clinicians belong to one clinic)
-  const primaryClinic = clinics[0];
-
   // Don't render if not authenticated
   if (!isAuthenticated) {
     return null;
   }
 
   // Loading state
-  if (isLoading) {
+  if (isLoading || isClinicLoading) {
     return (
       <div className="flex justify-center items-center min-h-[400px]">
         <div className="flex flex-col items-center gap-4">
@@ -178,7 +178,7 @@ export default function PatientsPage() {
               />
             </svg>
             <p className="text-gray-500">No patients enrolled yet</p>
-            {primaryClinic && (
+            {selectedClinic && (
               <Button onClick={() => setIsInviteModalOpen(true)}>
                 Invite Your First Patient
               </Button>
@@ -186,13 +186,13 @@ export default function PatientsPage() {
           </div>
         </div>
 
-        {primaryClinic && (
+        {selectedClinic && (
           <>
             <InvitePatientModal
               isOpen={isInviteModalOpen}
               onClose={() => setIsInviteModalOpen(false)}
               onSuccess={handleInviteSuccess}
-              clinicId={primaryClinic.id}
+              clinicId={selectedClinic.id}
             />
             {lastInvite && (
               <InviteSuccessModal
@@ -215,7 +215,7 @@ export default function PatientsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">My Patients</h1>
-          {primaryClinic && (
+          {selectedClinic && (
             <Button onClick={() => setIsInviteModalOpen(true)}>
               <span className="flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -243,13 +243,13 @@ export default function PatientsPage() {
         </div>
       </div>
 
-      {primaryClinic && (
+      {selectedClinic && (
         <>
           <InvitePatientModal
             isOpen={isInviteModalOpen}
             onClose={() => setIsInviteModalOpen(false)}
             onSuccess={handleInviteSuccess}
-            clinicId={primaryClinic.id}
+            clinicId={selectedClinic.id}
           />
           {lastInvite && (
             <InviteSuccessModal

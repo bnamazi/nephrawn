@@ -47,6 +47,89 @@ router.get("/me", async (req: Request, res: Response) => {
   }
 });
 
+// GET /patient/clinics - Get clinics the patient is enrolled in
+router.get("/clinics", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+
+    const enrollments = await prisma.enrollment.findMany({
+      where: {
+        patientId,
+        status: "ACTIVE",
+      },
+      include: {
+        clinic: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+          },
+        },
+        clinician: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: { enrolledAt: "desc" },
+    });
+
+    const clinics = enrollments.map((e) => ({
+      id: e.clinic.id,
+      name: e.clinic.name,
+      phone: e.clinic.phone,
+      email: e.clinic.email,
+      enrolledAt: e.enrolledAt,
+      isPrimary: e.isPrimary,
+      clinician: {
+        id: e.clinician.id,
+        name: e.clinician.name,
+      },
+    }));
+
+    res.json({ clinics });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch clinics" });
+  }
+});
+
+// POST /patient/clinics/:clinicId/leave - Leave a clinic (self-discharge)
+router.post("/clinics/:clinicId/leave", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { clinicId } = req.params;
+
+    // Find active enrollment
+    const enrollment = await prisma.enrollment.findFirst({
+      where: {
+        patientId,
+        clinicId,
+        status: "ACTIVE",
+      },
+    });
+
+    if (!enrollment) {
+      res.status(404).json({ error: "No active enrollment found at this clinic" });
+      return;
+    }
+
+    // Update enrollment to discharged
+    await prisma.enrollment.update({
+      where: { id: enrollment.id },
+      data: {
+        status: "DISCHARGED",
+        dischargedAt: new Date(),
+      },
+    });
+
+    res.json({ success: true, message: "Successfully left the clinic" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to leave clinic" });
+  }
+});
+
 // POST /patient/checkins - Submit a symptom check-in
 router.post("/checkins", async (req: Request, res: Response) => {
   try {

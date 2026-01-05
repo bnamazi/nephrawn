@@ -58,13 +58,68 @@ router.get("/me", async (req: Request, res: Response) => {
   }
 });
 
+// GET /clinician/clinics - Get clinics the clinician belongs to
+router.get("/clinics", async (req: Request, res: Response) => {
+  try {
+    const clinicianId = req.user!.sub;
+
+    const memberships = await prisma.clinicMembership.findMany({
+      where: {
+        clinicianId,
+        status: "ACTIVE",
+      },
+      include: {
+        clinic: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: { joinedAt: "asc" },
+    });
+
+    const clinics = memberships
+      .filter((m) => m.clinic.status === "ACTIVE")
+      .map((m) => ({
+        id: m.clinic.id,
+        name: m.clinic.name,
+        slug: m.clinic.slug,
+        role: m.role,
+        joinedAt: m.joinedAt,
+      }));
+
+    res.json({ clinics });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch clinics" });
+  }
+});
+
 // GET /clinician/patients - List enrolled patients (active only)
+// Optional query param: clinicId - filter by clinic
 router.get("/patients", async (req: Request, res: Response) => {
   try {
+    const clinicianId = req.user!.sub;
+    const clinicId = req.query.clinicId as string | undefined;
+
+    // If clinicId provided, verify membership
+    if (clinicId) {
+      const membership = await prisma.clinicMembership.findUnique({
+        where: { clinicId_clinicianId: { clinicId, clinicianId } },
+      });
+      if (!membership || membership.status !== "ACTIVE") {
+        res.status(403).json({ error: "Not a member of this clinic" });
+        return;
+      }
+    }
+
     const enrollments = await prisma.enrollment.findMany({
       where: {
-        clinicianId: req.user!.sub,
+        clinicianId,
         status: "ACTIVE",
+        ...(clinicId && { clinicId }),
       },
       include: {
         patient: {
@@ -73,6 +128,12 @@ router.get("/patients", async (req: Request, res: Response) => {
             name: true,
             email: true,
             dateOfBirth: true,
+          },
+        },
+        clinic: {
+          select: {
+            id: true,
+            name: true,
           },
         },
       },
@@ -86,6 +147,10 @@ router.get("/patients", async (req: Request, res: Response) => {
       dateOfBirth: e.patient.dateOfBirth,
       enrolledAt: e.enrolledAt,
       isPrimary: e.isPrimary,
+      clinic: {
+        id: e.clinic.id,
+        name: e.clinic.name,
+      },
     }));
 
     res.json({ patients });
