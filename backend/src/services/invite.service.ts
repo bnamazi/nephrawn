@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import { prisma } from "../lib/prisma.js";
 import { InviteStatus } from "@prisma/client";
 import { logInteraction } from "./interaction.service.js";
+import { logAudit } from "./audit.service.js";
 
 const INVITE_CODE_LENGTH = 40;
 const INVITE_EXPIRY_DAYS = 7;
@@ -88,6 +89,21 @@ export async function createInvite(input: CreateInviteInput): Promise<CreateInvi
       createdBy: {
         select: { id: true, name: true },
       },
+    },
+  });
+
+  // Audit log - fire and forget
+  logAudit({
+    action: "invite.created",
+    actorType: "clinician",
+    actorId: input.clinicianId,
+    resourceType: "invite",
+    resourceId: invite.id,
+    metadata: {
+      clinicId: input.clinicId,
+      clinicName: invite.clinic.name,
+      patientEmail: input.patientEmail ?? null,
+      expiresAt: expiresAt.toISOString(),
     },
   });
 
@@ -263,6 +279,18 @@ export async function revokeInvite(
   await prisma.invite.update({
     where: { id: inviteId },
     data: { status: "REVOKED" },
+  });
+
+  // Audit log - fire and forget
+  logAudit({
+    action: "invite.revoked",
+    actorType: "clinician",
+    actorId: clinicianId,
+    resourceType: "invite",
+    resourceId: inviteId,
+    metadata: {
+      clinicId: invite.clinicId,
+    },
   });
 
   return { success: true };
@@ -502,6 +530,35 @@ export async function claimInvite(input: ClaimInviteInput): Promise<ClaimInviteR
   } catch {
     // Non-critical, don't fail the claim
   }
+
+  // Audit logs - fire and forget
+  logAudit({
+    action: "invite.claimed",
+    actorType: "patient",
+    actorId: patient.id,
+    resourceType: "invite",
+    resourceId: invite.id,
+    metadata: {
+      clinicId: invite.clinicId,
+      clinicName: invite.clinic.name,
+      isNewPatient,
+    },
+  });
+
+  logAudit({
+    action: "enrollment.created",
+    actorType: "patient",
+    actorId: patient.id,
+    resourceType: "enrollment",
+    resourceId: result.id,
+    metadata: {
+      clinicId: invite.clinicId,
+      clinicName: invite.clinic.name,
+      clinicianId: invite.createdById,
+      inviteId: invite.id,
+      enrolledVia: "INVITE",
+    },
+  });
 
   return {
     success: true,

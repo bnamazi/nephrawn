@@ -14,6 +14,7 @@ import {
   getMeasurementSummary,
   getPatientDashboard,
 } from "../services/timeseries.service.js";
+import { logAudit } from "../services/audit.service.js";
 
 const router = Router();
 
@@ -121,6 +122,19 @@ router.post("/clinics/:clinicId/leave", async (req: Request, res: Response) => {
       data: {
         status: "DISCHARGED",
         dischargedAt: new Date(),
+      },
+    });
+
+    // Audit log - fire and forget
+    logAudit({
+      action: "enrollment.self_discharged",
+      actorType: "patient",
+      actorId: patientId,
+      resourceType: "enrollment",
+      resourceId: enrollment.id,
+      metadata: {
+        clinicId,
+        clinicianId: enrollment.clinicianId,
       },
     });
 

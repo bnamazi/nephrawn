@@ -323,3 +323,25 @@ model ClinicianNote {
   @@index([alertId])
   @@map("clinician_notes")
 }
+
+// ============================================
+// Audit Trail
+// ============================================
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String   // e.g., 'invite.created', 'invite.revoked', 'enrollment.created'
+  actorType   String   // 'clinician', 'patient', 'system'
+  actorId     String?  // ID of the actor (null for system actions)
+  resourceType String  // 'invite', 'enrollment', 'clinic', etc.
+  resourceId  String   // ID of the affected resource
+  metadata    Json     @default("{}") // Additional context
+  ipAddress   String?  // For security auditing
+  userAgent   String?  // For security auditing
+  createdAt   DateTime @default(now())
+
+  @@index([action, createdAt])
+  @@index([actorType, actorId, createdAt])
+  @@index([resourceType, resourceId, createdAt])
+  @@map("audit_logs")
+}

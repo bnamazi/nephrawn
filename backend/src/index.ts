@@ -3,6 +3,7 @@ import { app } from "./app.js";
 import { config } from "./lib/config.js";
 import { logger } from "./lib/logger.js";
 import { prisma } from "./lib/prisma.js";
+import { startBackgroundJobs, stopBackgroundJobs } from "./jobs/index.js";
 
 /**
  * Startup diagnostics - verify critical dependencies
@@ -45,6 +46,9 @@ async function startupDiagnostics(): Promise<boolean> {
 async function gracefulShutdown(signal: string) {
   logger.info({ signal }, "Shutdown signal received, closing connections...");
 
+  // Stop background jobs
+  stopBackgroundJobs();
+
   try {
     await prisma.$disconnect();
     logger.info("Database connection closed");
@@ -86,6 +90,9 @@ async function main() {
       { port: config.port, url: `http://localhost:${config.port}` },
       "Server started"
     );
+
+    // Start background jobs after server is ready
+    startBackgroundJobs();
   });
 }
 

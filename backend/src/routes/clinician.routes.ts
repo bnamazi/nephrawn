@@ -26,6 +26,7 @@ import {
   getMeasurementSummary,
   getPatientDashboard,
 } from "../services/timeseries.service.js";
+import { getAuditLogs } from "../services/audit.service.js";
 
 const router = Router();
 
@@ -683,6 +684,162 @@ router.get("/patients/:patientId/summary/:type", async (req: Request, res: Respo
     res.json({ summary });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch summary" });
+  }
+});
+
+// ============================================
+// Enrollment History & Audit Logs
+// ============================================
+
+// GET /clinician/enrollments - Get enrollment history for a clinic
+// Query params: clinicId (required), status (optional), limit, offset
+router.get("/enrollments", async (req: Request, res: Response) => {
+  try {
+    const clinicianId = req.user!.sub;
+    const clinicId = req.query.clinicId as string;
+    const status = req.query.status as string | undefined;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    if (!clinicId) {
+      res.status(400).json({ error: "clinicId is required" });
+      return;
+    }
+
+    // Verify clinician has admin/owner role in the clinic
+    const membership = await prisma.clinicMembership.findUnique({
+      where: { clinicId_clinicianId: { clinicId, clinicianId } },
+    });
+
+    if (!membership || membership.status !== "ACTIVE") {
+      res.status(403).json({ error: "Not a member of this clinic" });
+      return;
+    }
+
+    // Only OWNER and ADMIN can view enrollment history
+    if (!["OWNER", "ADMIN"].includes(membership.role)) {
+      res.status(403).json({ error: "Insufficient permissions - requires OWNER or ADMIN role" });
+      return;
+    }
+
+    const where: Record<string, unknown> = { clinicId };
+    if (status) {
+      where.status = status;
+    }
+
+    const enrollments = await prisma.enrollment.findMany({
+      where,
+      include: {
+        patient: {
+          select: { id: true, name: true, email: true },
+        },
+        clinician: {
+          select: { id: true, name: true },
+        },
+        invite: {
+          select: { id: true, code: true, createdAt: true },
+        },
+      },
+      orderBy: { enrolledAt: "desc" },
+      take: limit,
+      skip: offset,
+    });
+
+    const total = await prisma.enrollment.count({ where });
+
+    res.json({
+      enrollments: enrollments.map((e) => ({
+        id: e.id,
+        status: e.status,
+        enrolledVia: e.enrolledVia,
+        enrolledAt: e.enrolledAt,
+        dischargedAt: e.dischargedAt,
+        isPrimary: e.isPrimary,
+        patient: e.patient,
+        clinician: e.clinician,
+        invite: e.invite
+          ? { id: e.invite.id, createdAt: e.invite.createdAt }
+          : null,
+      })),
+      total,
+      limit,
+      offset,
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch enrollments" });
+  }
+});
+
+// GET /clinician/audit-logs - Get audit logs for a clinic
+// Query params: clinicId (required), resourceType, action, limit, offset
+router.get("/audit-logs", async (req: Request, res: Response) => {
+  try {
+    const clinicianId = req.user!.sub;
+    const clinicId = req.query.clinicId as string;
+    const resourceType = req.query.resourceType as string | undefined;
+    const action = req.query.action as string | undefined;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    if (!clinicId) {
+      res.status(400).json({ error: "clinicId is required" });
+      return;
+    }
+
+    // Verify clinician has admin/owner role in the clinic
+    const membership = await prisma.clinicMembership.findUnique({
+      where: { clinicId_clinicianId: { clinicId, clinicianId } },
+    });
+
+    if (!membership || membership.status !== "ACTIVE") {
+      res.status(403).json({ error: "Not a member of this clinic" });
+      return;
+    }
+
+    // Only OWNER and ADMIN can view audit logs
+    if (!["OWNER", "ADMIN"].includes(membership.role)) {
+      res.status(403).json({ error: "Insufficient permissions - requires OWNER or ADMIN role" });
+      return;
+    }
+
+    // Get all resources (invites, enrollments) for this clinic to filter audit logs
+    const clinicInvites = await prisma.invite.findMany({
+      where: { clinicId },
+      select: { id: true },
+    });
+    const clinicEnrollments = await prisma.enrollment.findMany({
+      where: { clinicId },
+      select: { id: true },
+    });
+
+    const inviteIds = clinicInvites.map((i) => i.id);
+    const enrollmentIds = clinicEnrollments.map((e) => e.id);
+
+    // Query audit logs for clinic resources
+    const logs = await getAuditLogs({
+      resourceType,
+      action: action as Parameters<typeof getAuditLogs>[0]["action"],
+      limit,
+      offset,
+    });
+
+    // Filter to only include logs for this clinic's resources
+    const filteredLogs = logs.filter((log) => {
+      if (log.resourceType === "invite") {
+        return inviteIds.includes(log.resourceId);
+      }
+      if (log.resourceType === "enrollment") {
+        return enrollmentIds.includes(log.resourceId);
+      }
+      if (log.resourceType === "clinic") {
+        return log.resourceId === clinicId;
+      }
+      return false;
+    });
+
+    res.json({ auditLogs: filteredLogs });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch audit logs" });
   }
 });
 
