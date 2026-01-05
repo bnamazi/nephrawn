@@ -11,12 +11,10 @@ export type CreateNoteInput = {
 
 export async function createNote(input: CreateNoteInput) {
   // Verify clinician is enrolled with this patient
-  const enrollment = await prisma.enrollment.findUnique({
+  const enrollment = await prisma.enrollment.findFirst({
     where: {
-      patientId_clinicianId: {
-        patientId: input.patientId,
-        clinicianId: input.clinicianId,
-      },
+      patientId: input.patientId,
+      clinicianId: input.clinicianId,
     },
   });
 
@@ -75,12 +73,10 @@ export async function getNotesByPatient(
   }
 ) {
   // Verify enrollment
-  const enrollment = await prisma.enrollment.findUnique({
+  const enrollment = await prisma.enrollment.findFirst({
     where: {
-      patientId_clinicianId: {
-        patientId,
-        clinicianId,
-      },
+      patientId,
+      clinicianId,
     },
   });
 
@@ -117,12 +113,10 @@ export async function getNotesByAlert(
     return null;
   }
 
-  const enrollment = await prisma.enrollment.findUnique({
+  const enrollment = await prisma.enrollment.findFirst({
     where: {
-      patientId_clinicianId: {
-        patientId: alert.patientId,
-        clinicianId,
-      },
+      patientId: alert.patientId,
+      clinicianId,
     },
   });
 
@@ -159,12 +153,10 @@ export async function getNoteById(noteId: string, clinicianId: string) {
   }
 
   // Verify enrollment
-  const enrollment = await prisma.enrollment.findUnique({
+  const enrollment = await prisma.enrollment.findFirst({
     where: {
-      patientId_clinicianId: {
-        patientId: note.patientId,
-        clinicianId,
-      },
+      patientId: note.patientId,
+      clinicianId,
     },
   });
 

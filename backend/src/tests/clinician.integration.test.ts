@@ -5,6 +5,8 @@ import {
   prisma,
   createTestPatient,
   createTestClinician,
+  createTestClinic,
+  createClinicMembership,
   getClinicianToken,
   cleanupTestData,
   disconnectPrisma,
@@ -13,12 +15,16 @@ import {
 describe("Clinician Workflow Integration Tests", () => {
   let patientId: string;
   let clinicianId: string;
+  let clinicId: string;
   let clinicianToken: string;
 
   beforeEach(async () => {
     await cleanupTestData();
 
-    // Create test patient and clinician
+    // Create test clinic, patient and clinician
+    const clinic = await createTestClinic();
+    clinicId = clinic.id;
+
     const patient = await createTestPatient();
     patientId = patient.id;
 
@@ -26,11 +32,15 @@ describe("Clinician Workflow Integration Tests", () => {
     clinicianId = clinician.id;
     clinicianToken = getClinicianToken(clinician.id);
 
+    // Create clinic membership
+    await createClinicMembership(clinic.id, clinician.id);
+
     // Create enrollment
     await prisma.enrollment.create({
       data: {
         patientId: patient.id,
         clinicianId: clinician.id,
+        clinicId: clinic.id,
       },
     });
   });

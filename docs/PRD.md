@@ -18,12 +18,38 @@ Nephrawn augments—not replaces—clinical judgment.
 
 ## MVP Scope
 - Patient symptom tracking
+- Clinic-initiated patient enrollment (invite model)
 - Patient–clinician relationship management
 - Manual measurement entry (weight, BP)
 - Time-series visualization
 - Manual clinician review
 - Basic rule-based alerts (no automation)
 - Interaction logging for RPM/CCM compliance
+
+---
+
+## Patient Enrollment Workflow
+
+### Overview
+Nephrawn uses a **clinic-initiated invite model** for patient enrollment. This ensures:
+- Clinicians control who can enroll (regulatory compliance)
+- Patients cannot self-enroll without authorization
+- No global patient/clinician search (privacy protection)
+
+### Clinician Flow
+1. Clinician navigates to Patients → Invite New Patient
+2. Enters patient name, date of birth, optional email
+3. System generates a unique invite code (40 characters)
+4. Clinician shares code with patient (print, email, or verbally)
+5. When patient claims, they appear in the enrolled patients list
+
+### Patient Flow
+1. Patient opens app → "Join a Clinic" / "I have an invite code"
+2. Enters the invite code
+3. Sees clinic name confirmation
+4. Enters date of birth for identity verification
+5. On match: account created (or linked if existing), enrollment activated
+6. Patient is now connected to the clinic and assigned clinician(s)
 
 ## Non-Goals (MVP)
 - Automated clinical decisions

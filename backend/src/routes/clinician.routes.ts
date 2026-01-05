@@ -101,12 +101,10 @@ router.get("/patients/:patientId", async (req: Request, res: Response) => {
     const clinicianId = req.user!.sub;
 
     // Check enrollment exists and is active
-    const enrollment = await prisma.enrollment.findUnique({
+    const enrollment = await prisma.enrollment.findFirst({
       where: {
-        patientId_clinicianId: {
-          patientId,
-          clinicianId,
-        },
+        patientId,
+        clinicianId,
       },
       include: {
         patient: {
@@ -155,12 +153,10 @@ router.get("/patients/:patientId/checkins", async (req: Request, res: Response) 
     const clinicianId = req.user!.sub;
 
     // Verify enrollment
-    const enrollment = await prisma.enrollment.findUnique({
+    const enrollment = await prisma.enrollment.findFirst({
       where: {
-        patientId_clinicianId: {
-          patientId,
-          clinicianId,
-        },
+        patientId,
+        clinicianId,
       },
     });
 
@@ -195,12 +191,10 @@ router.get("/patients/:patientId/measurements", async (req: Request, res: Respon
     const clinicianId = req.user!.sub;
 
     // Verify enrollment
-    const enrollment = await prisma.enrollment.findUnique({
+    const enrollment = await prisma.enrollment.findFirst({
       where: {
-        patientId_clinicianId: {
-          patientId,
-          clinicianId,
-        },
+        patientId,
+        clinicianId,
       },
     });
 
@@ -263,12 +257,10 @@ router.get("/alerts/:alertId", async (req: Request, res: Response) => {
     }
 
     // Verify clinician is enrolled with this patient
-    const enrollment = await prisma.enrollment.findUnique({
+    const enrollment = await prisma.enrollment.findFirst({
       where: {
-        patientId_clinicianId: {
-          patientId: alert.patientId,
-          clinicianId,
-        },
+        patientId: alert.patientId,
+        clinicianId,
       },
     });
 
@@ -494,10 +486,8 @@ router.delete("/notes/:noteId", async (req: Request, res: Response) => {
 
 // Helper to verify enrollment
 async function verifyEnrollment(patientId: string, clinicianId: string) {
-  const enrollment = await prisma.enrollment.findUnique({
-    where: {
-      patientId_clinicianId: { patientId, clinicianId },
-    },
+  const enrollment = await prisma.enrollment.findFirst({
+    where: { patientId, clinicianId },
   });
   return enrollment?.status === "ACTIVE";
 }

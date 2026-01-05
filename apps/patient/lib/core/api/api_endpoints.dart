@@ -20,4 +20,14 @@ class ApiEndpoints {
 
   /// Get summary for a specific type
   static String summary(String type) => '/patient/summary/$type';
+
+  // Invite endpoints (public)
+  /// Validate an invite code
+  static String validateInvite(String code) => '/auth/invite/$code';
+
+  /// Claim an invite (new patient registration)
+  static String claimInvite(String code) => '/auth/invite/$code/claim';
+
+  /// Claim an invite (existing patient - authenticated)
+  static String claimExistingInvite(String code) => '/auth/invite/$code/claim-existing';
 }

@@ -76,6 +76,35 @@ class LoginScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+
+                  const SizedBox(height: 16),
+
+                  // Divider with "or"
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'or',
+                          style: TextStyle(color: Colors.grey.shade500),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Join clinic with invite code
+                  OutlinedButton.icon(
+                    onPressed: () => context.go(Routes.joinClinic),
+                    icon: const Icon(Icons.local_hospital_outlined),
+                    label: const Text('Join with Invite Code'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
                 ],
               ),
             ),

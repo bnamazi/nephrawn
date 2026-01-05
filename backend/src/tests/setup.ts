@@ -24,6 +24,11 @@ export const testClinician = {
   name: "Dr. Test Clinician",
 };
 
+export const testClinic = {
+  name: "Test Clinic",
+  slug: "test-clinic",
+};
+
 /**
  * Create a test patient in the database
  */
@@ -53,6 +58,33 @@ export async function createTestClinician(overrides: Partial<typeof testClinicia
       email: data.email,
       passwordHash: hashedPassword,
       name: data.name,
+    },
+  });
+}
+
+/**
+ * Create a test clinic in the database
+ */
+export async function createTestClinic(overrides: Partial<typeof testClinic> = {}) {
+  const data = { ...testClinic, ...overrides };
+
+  return prisma.clinic.create({
+    data: {
+      name: data.name,
+      slug: data.slug,
+    },
+  });
+}
+
+/**
+ * Create a clinic membership for a clinician
+ */
+export async function createClinicMembership(clinicId: string, clinicianId: string, role: "OWNER" | "ADMIN" | "CLINICIAN" | "STAFF" = "CLINICIAN") {
+  return prisma.clinicMembership.create({
+    data: {
+      clinicId,
+      clinicianId,
+      role,
     },
   });
 }
@@ -94,8 +126,11 @@ export async function cleanupTestData() {
   await prisma.symptomCheckin.deleteMany({});
   await prisma.measurement.deleteMany({});
   await prisma.enrollment.deleteMany({});
+  await prisma.invite.deleteMany({});
+  await prisma.clinicMembership.deleteMany({});
   await prisma.patient.deleteMany({});
   await prisma.clinician.deleteMany({});
+  await prisma.clinic.deleteMany({});
 }
 
 /**

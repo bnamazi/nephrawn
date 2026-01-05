@@ -15,6 +15,7 @@ import {
 import authRoutes from "./routes/auth.routes.js";
 import clinicianRoutes from "./routes/clinician.routes.js";
 import patientRoutes from "./routes/patient.routes.js";
+import inviteRoutes from "./routes/invite.routes.js";
 
 export function createApp(options: { skipRateLimiting?: boolean; skipHttpLogging?: boolean } = {}) {
   const app = express();
@@ -92,6 +93,9 @@ export function createApp(options: { skipRateLimiting?: boolean; skipHttpLogging
   }
   app.use("/clinician", clinicianRoutes);
   app.use("/patient", patientRoutes);
+
+  // Invite routes (includes both /clinician/* and /auth/* endpoints)
+  app.use(inviteRoutes);
 
   // 404 handler
   app.use(notFoundHandler);

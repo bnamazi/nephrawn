@@ -26,6 +26,7 @@ model Patient {
   measurements     Measurement[]
   alerts           Alert[]
   clinicianNotes   ClinicianNote[]
+  claimedInvites   Invite[]         @relation("InvitesClaimed")
 
   @@map("patients")
 }
@@ -43,6 +44,8 @@ model Clinician {
   interactionLogs    InteractionLog[]
   acknowledgedAlerts Alert[]
   clinicianNotes     ClinicianNote[]
+  clinicMemberships  ClinicMembership[]
+  createdInvites     Invite[]           @relation("InvitesCreated")
 
   @@map("clinicians")
 }
@@ -52,12 +55,106 @@ enum ClinicianRole {
   ADMIN
 }
 
+// ============================================
+// Clinic & Enrollment Entities
+// ============================================
+
+model Clinic {
+  id        String       @id @default(uuid())
+  name      String
+  slug      String       @unique // URL-safe identifier
+  npi       String?      @unique // National Provider Identifier
+  address   Json?        // Structured address
+  phone     String?
+  status    ClinicStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  memberships ClinicMembership[]
+  enrollments Enrollment[]
+  invites     Invite[]
+
+  @@index([status])
+  @@map("clinics")
+}
+
+enum ClinicStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+model ClinicMembership {
+  id          String                 @id @default(uuid())
+  clinicId    String
+  clinicianId String
+  role        ClinicMembershipRole   @default(CLINICIAN)
+  status      ClinicMembershipStatus @default(ACTIVE)
+  joinedAt    DateTime               @default(now())
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  clinic    Clinic    @relation(fields: [clinicId], references: [id])
+  clinician Clinician @relation(fields: [clinicianId], references: [id])
+
+  @@unique([clinicId, clinicianId])
+  @@index([clinicianId, status])
+  @@map("clinic_memberships")
+}
+
+enum ClinicMembershipRole {
+  OWNER
+  ADMIN
+  CLINICIAN
+  STAFF
+}
+
+enum ClinicMembershipStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Invite {
+  id           String       @id @default(uuid())
+  code         String       @unique @db.VarChar(40) // Cryptographic random code
+  clinicId     String
+  createdById  String
+  patientName  String
+  patientDob   DateTime     @db.Date // For identity verification
+  patientEmail String?      // Optional: for notification
+  status       InviteStatus @default(PENDING)
+  expiresAt    DateTime     // Default: 7 days from creation
+  claimedById  String?      // Patient who claimed
+  claimedAt    DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  clinic    Clinic     @relation(fields: [clinicId], references: [id])
+  createdBy Clinician  @relation("InvitesCreated", fields: [createdById], references: [id])
+  claimedBy Patient?   @relation("InvitesClaimed", fields: [claimedById], references: [id])
+
+  enrollments Enrollment[]
+
+  @@index([status, expiresAt])
+  @@index([clinicId, status])
+  @@map("invites")
+}
+
+enum InviteStatus {
+  PENDING
+  CLAIMED
+  EXPIRED
+  REVOKED
+}
+
 model Enrollment {
   id           String           @id @default(uuid())
   patientId    String
   clinicianId  String
+  clinicId     String
   status       EnrollmentStatus @default(ACTIVE)
   isPrimary    Boolean          @default(true)
+  enrolledVia  EnrolledVia      @default(INVITE)
+  inviteId     String?          // FK to Invite if enrolled via invite
   enrolledAt   DateTime         @default(now())
   dischargedAt DateTime?
   createdAt    DateTime         @default(now())
@@ -65,10 +162,19 @@ model Enrollment {
 
   patient   Patient   @relation(fields: [patientId], references: [id])
   clinician Clinician @relation(fields: [clinicianId], references: [id])
+  clinic    Clinic    @relation(fields: [clinicId], references: [id])
+  invite    Invite?   @relation(fields: [inviteId], references: [id])
 
-  @@unique([patientId, clinicianId])
-  @@index([clinicianId, status])
+  @@unique([patientId, clinicianId, clinicId])
+  @@index([clinicianId, clinicId, status])
+  @@index([patientId, clinicId])
   @@map("enrollments")
+}
+
+enum EnrolledVia {
+  INVITE
+  MIGRATION
+  ADMIN
 }
 
 enum EnrollmentStatus {

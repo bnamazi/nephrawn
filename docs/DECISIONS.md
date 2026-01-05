@@ -61,3 +61,46 @@ Consequence: Clean BP charts. Visibility into data quality issues.
 Context: Two readings 5 minutes apart shouldn't determine a "trend".
 Decision: Trend calculation requires 4+ data points AND 24+ hour time span.
 Consequence: Avoids false trend signals from clustered measurements.
+
+---
+
+## 2025-01 — Clinic-initiated invite model for enrollment
+Context: RPM/CCM systems must ensure proper authorization before clinicians access patient data. Three options considered:
+1. **Open discovery**: Patient searches for clinicians → privacy risk, enumeration attacks
+2. **Patient-initiated requests**: Patient requests enrollment → still allows unauthorized access attempts
+3. **Clinic-initiated invites**: Clinician creates invite with patient info → patient claims with verification
+
+Decision: Use clinic-initiated invite model. Clinician creates invite with patient name + DOB. Patient claims using code + DOB verification.
+
+Consequence:
+- No global patient/clinician search endpoints (enumeration protection)
+- Patients cannot self-enroll without clinic authorization
+- Clinician-controlled enrollment aligns with clinical workflows
+- DOB verification provides identity assurance without exposing patient data
+
+## 2025-01 — Clinic as organizational boundary
+Context: Healthcare organizations need tenant isolation. A patient at Clinic A should not be visible to clinicians at Clinic B.
+Decision: Introduce `Clinic` entity. All enrollments reference both `clinicianId` and `clinicId`. Authorization checks include clinic membership.
+Consequence:
+- Multi-tenant isolation by default
+- Clinicians can work at multiple clinics
+- Patients can be enrolled at multiple clinics (e.g., nephrology + cardiology)
+- Future: billing, NPI, and org-level settings per clinic
+
+## 2025-01 — Cryptographic invite codes
+Context: Invite codes must be unguessable to prevent enumeration attacks.
+Decision: Use 40-character cryptographically random codes (alphanumeric). Keyspace: ~10^48 combinations.
+Consequence:
+- Effectively unguessable via brute force
+- Short enough to type or share verbally
+- Unique index ensures no collisions
+- Rate limiting provides additional protection
+
+## 2025-01 — DOB as identity verification
+Context: Need to verify patient identity when claiming invite without creating a global patient search.
+Decision: Clinician provides patient DOB when creating invite. Patient must enter matching DOB to claim.
+Consequence:
+- Simple, familiar verification factor
+- No need for email verification (though optional)
+- Minimal PII in invite record
+- Combined with invite code, provides reasonable assurance

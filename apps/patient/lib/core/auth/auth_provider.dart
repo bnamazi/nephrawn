@@ -141,4 +141,32 @@ class AuthProvider extends ChangeNotifier {
     _error = 'Session expired. Please log in again.';
     notifyListeners();
   }
+
+  /// Set auth token from invite claim (bypasses login flow)
+  Future<bool> setTokenFromClaim(String token) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _storage.saveToken(token);
+      // Validate token by fetching user info
+      _user = await _authService.getMe();
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _error = e.message;
+      await _storage.deleteToken();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Failed to set up session';
+      await _storage.deleteToken();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
 }

@@ -35,20 +35,71 @@ The schema prioritizes:
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
 
+### Clinic
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| name | string | Organization name |
+| slug | string | Unique URL-safe identifier |
+| npi | string | Nullable; National Provider Identifier |
+| address | JSONB | Nullable; structured address |
+| phone | string | Nullable |
+| status | enum | active, suspended |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+**Constraints**: Unique (slug), Unique (npi) if not null
+
+### ClinicMembership
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| clinicId | UUID | FK → Clinic |
+| clinicianId | UUID | FK → Clinician |
+| role | enum | owner, admin, clinician, staff |
+| status | enum | active, inactive |
+| joinedAt | timestamp | |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+**Constraints**: Unique (clinicId, clinicianId)
+
+### Invite
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| code | string(40) | Cryptographic random code |
+| clinicId | UUID | FK → Clinic |
+| createdById | UUID | FK → Clinician |
+| patientName | string | Expected patient name |
+| patientDob | date | For identity verification |
+| patientEmail | string | Nullable; for notification |
+| status | enum | pending, claimed, expired, revoked |
+| expiresAt | timestamp | Default: 7 days |
+| claimedById | UUID | Nullable; FK → Patient who claimed |
+| claimedAt | timestamp | Nullable |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+**Constraints**: Unique (code), Index (status, expiresAt) for cleanup jobs
+
 ### Enrollment
 | Field | Type | Notes |
 |-------|------|-------|
 | id | UUID | Primary key |
 | patientId | UUID | FK → Patient |
 | clinicianId | UUID | FK → Clinician |
+| clinicId | UUID | FK → Clinic (organization boundary) |
 | status | enum | active, paused, discharged |
 | isPrimary | boolean | Supports multi-clinician (default true) |
+| enrolledVia | enum | invite, migration, admin |
+| inviteId | UUID | Nullable; FK → Invite if enrolled via invite |
 | enrolledAt | timestamp | When relationship started |
 | dischargedAt | timestamp | Nullable |
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
 
-**Constraints**: Unique (patientId, clinicianId)
+**Constraints**: Unique (patientId, clinicianId, clinicId)
 
 ### SymptomCheckin
 | Field | Type | Notes |
@@ -169,16 +220,27 @@ The schema prioritizes:
 ## Relationships
 
 ```
+Clinic ──────┬───── many ClinicMemberships ───── Clinician
+             ├───── many Enrollments
+             └───── many Invites
+
+Clinician ───┬───── many ClinicMemberships ───── Clinic
+             ├───── many Invites (created)
+             ├───── many InteractionLogs
+             ├───── many ClinicianNotes
+             └───── many Alerts (via acknowledgedBy)
+
 Patient ─────┬───── many SymptomCheckins
              ├───── many Measurements
              ├───── many Alerts
              ├───── many InteractionLogs
              ├───── many ClinicianNotes
-             └───── many Enrollments ───── Clinician
+             ├───── many Enrollments ───── Clinician + Clinic
+             └───── many Invites (claimed)
 
-Clinician ───┬───── many InteractionLogs
-             ├───── many ClinicianNotes
-             └───── many Alerts (via acknowledgedBy)
+Invite ──────┬───── one Clinic
+             ├───── one Clinician (createdBy)
+             └───── one Patient (claimedBy, nullable)
 
 Alert ─────── many ClinicianNotes (via alertId)
 ```
@@ -189,7 +251,14 @@ Alert ─────── many ClinicianNotes (via alertId)
 
 | Table | Index | Purpose |
 |-------|-------|---------|
-| Enrollment | (clinicianId, status) | List active patients for clinician |
+| Clinic | (slug) | Lookup by URL-safe identifier |
+| ClinicMembership | (clinicId, clinicianId) | Membership lookup |
+| ClinicMembership | (clinicianId, status) | Clinician's active clinics |
+| Invite | (code) | Invite claim lookup |
+| Invite | (status, expiresAt) | Cleanup job for expired invites |
+| Invite | (clinicId, status) | Pending invites for clinic |
+| Enrollment | (clinicianId, clinicId, status) | List active patients for clinician in clinic |
+| Enrollment | (patientId, clinicId) | Patient's enrollments per clinic |
 | Measurement | (patientId, type, timestamp) | Time-series queries |
 | SymptomCheckin | (patientId, timestamp) | Timeline queries |
 | Alert | (patientId, status, triggeredAt) | Alert inbox |
@@ -281,3 +350,7 @@ Two-layer deduplication prevents duplicate data from corrupting trends:
 | inputUnit preserves original | Audit trail of what user submitted |
 | Alert update vs create | Prevents alert spam for ongoing conditions |
 | Transaction for Measurement + Log | Atomicity; no orphaned records |
+| Clinic as organization boundary | Multi-tenant isolation; HIPAA compliance |
+| Invite code (40 chars) | ~10^48 combinations; unguessable |
+| DOB verification on claim | Identity verification without global patient search |
+| enrolledVia on Enrollment | Audit trail for how enrollment was created |

@@ -54,6 +54,8 @@
 | POST | `/auth/patient/register` | Register new patient |
 | POST | `/auth/patient/login` | Patient login → JWT |
 | POST | `/auth/clinician/login` | Clinician login → JWT |
+| GET | `/auth/invite/:code` | Validate invite code (public) |
+| POST | `/auth/invite/:code/claim` | Claim invite with DOB verification |
 
 ### Patient Routes (`/patient`) — requires patient role
 | Method | Endpoint | Description |
@@ -90,6 +92,16 @@
 | GET | `/clinician/notes/:noteId` | Get single note |
 | PUT | `/clinician/notes/:noteId` | Update note (author only) |
 | DELETE | `/clinician/notes/:noteId` | Delete note (author only) |
+
+### Clinic & Enrollment Routes (`/clinician/clinic`) — requires clinician role
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/clinician/clinics` | List clinician's clinic memberships |
+| GET | `/clinician/clinic/:clinicId/invites` | List pending invites for clinic |
+| POST | `/clinician/clinic/:clinicId/invites` | Create new patient invite |
+| DELETE | `/clinician/clinic/:clinicId/invites/:inviteId` | Revoke pending invite |
+| GET | `/clinician/clinic/:clinicId/enrollments` | List active enrollments |
+| DELETE | `/clinician/clinic/:clinicId/enrollments/:enrollmentId` | Discharge patient |
 
 ### Patient App (MVP)
 - Login / session management
@@ -134,6 +146,15 @@
 3. Acknowledges alert → Interaction logged
 4. Adds note → Interaction logged
 5. All interactions timestamped for RPM/CCM
+
+### Patient Enrollment (MVP)
+1. Clinician creates invite with patient name + DOB + optional email
+2. System generates 40-char cryptographic code
+3. Clinician shares code with patient (verbally, print, or email)
+4. Patient enters code in app → shown clinic name (masked DOB prompt)
+5. Patient enters DOB for verification
+6. On match: Patient account created/linked, Enrollment created
+7. Clinician sees patient in enrolled list
 
 ### Document Upload (MVP+)
 1. Patient uploads file via signed URL
@@ -223,18 +244,37 @@ Constraint: Must be cacheable; never blocks UI render
 - JWT tokens with role claim (patient | clinician | admin)
 - Short-lived access tokens; refresh token rotation
 - Tokens never stored in localStorage (httpOnly cookies for web)
+- Invite codes: 40-character cryptographic random strings (~10^48 keyspace)
 
 ### Authorization
 - Enforced at API middleware, not UI
 - Patients can only access own data
-- Clinicians can only access enrolled patients
+- Clinicians can only access enrolled patients **within their clinic(s)**
+- Clinic boundary: clinicians only see patients enrolled in clinics they belong to
 - Admin role for user management (MVP+)
+
+### Enrollment Security
+- **Clinic-initiated invites**: Clinician creates invite with patient name + DOB
+- **DOB verification**: Patient must provide matching DOB to claim invite
+- **No global search**: Patients cannot search for clinics/clinicians; must have invite code
+- **Invite expiration**: Default 7 days; configurable per invite
+- **Rate limiting**: 50 invites/day per clinician; 5 claim attempts/hour per IP
+
+### Threat Mitigations
+| Threat | Mitigation |
+|--------|------------|
+| Invite code enumeration | 40-char random codes; rate limiting |
+| Patient impersonation | DOB verification; IP rate limiting |
+| Unauthorized enrollment | Clinic-initiated only; no self-enrollment |
+| Cross-clinic data access | clinicId in Enrollment; enforced at query level |
+| Invite spam | Per-clinician daily limits |
 
 ### Data Protection
 - No PHI in logs or error messages
 - Encryption at rest (Postgres)
 - TLS in transit
 - Audit trail for sensitive operations
+- Patient name/DOB in invites: minimal PII for verification only
 
 ---
 

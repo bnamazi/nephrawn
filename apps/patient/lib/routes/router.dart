@@ -12,6 +12,9 @@ import '../features/blood_pressure/bp_entry_screen.dart';
 import '../features/symptom_checkin/symptom_checkin_screen.dart';
 import '../features/symptom_checkin/symptom_entry_screen.dart';
 import '../features/alerts/alerts_screen.dart';
+import '../features/join_clinic/join_clinic_screen.dart';
+import '../features/join_clinic/claim_invite_screen.dart';
+import '../features/join_clinic/claim_success_screen.dart';
 
 /// Route paths
 class Routes {
@@ -26,6 +29,10 @@ class Routes {
   static const String checkins = '/checkins';
   static const String addCheckin = '/add-checkin';
   static const String alerts = '/alerts';
+  // Invite claim flow
+  static const String joinClinic = '/join-clinic';
+  static const String claimInvite = '/claim-invite';
+  static const String claimSuccess = '/claim-success';
 }
 
 /// Create app router with auth guards
@@ -37,7 +44,10 @@ GoRouter createRouter(AuthProvider authProvider) {
       final isLoggedIn = authProvider.isAuthenticated;
       final isInitialized = authProvider.isInitialized;
       final isOnAuthPage = state.matchedLocation == Routes.login ||
-          state.matchedLocation == Routes.register;
+          state.matchedLocation == Routes.register ||
+          state.matchedLocation == Routes.joinClinic ||
+          state.matchedLocation == Routes.claimInvite ||
+          state.matchedLocation == Routes.claimSuccess;
 
       // Wait for initialization
       if (!isInitialized) {
@@ -49,8 +59,11 @@ GoRouter createRouter(AuthProvider authProvider) {
         return Routes.login;
       }
 
-      // Logged in and on auth page -> redirect to home
-      if (isLoggedIn && isOnAuthPage) {
+      // Logged in and on login/register page -> redirect to home
+      // (but allow staying on claim success to see the confirmation)
+      if (isLoggedIn &&
+          (state.matchedLocation == Routes.login ||
+              state.matchedLocation == Routes.register)) {
         return Routes.home;
       }
 
@@ -100,6 +113,18 @@ GoRouter createRouter(AuthProvider authProvider) {
       GoRoute(
         path: Routes.alerts,
         builder: (context, state) => const AlertsScreen(),
+      ),
+      GoRoute(
+        path: Routes.joinClinic,
+        builder: (context, state) => const JoinClinicScreen(),
+      ),
+      GoRoute(
+        path: Routes.claimInvite,
+        builder: (context, state) => const ClaimInviteScreen(),
+      ),
+      GoRoute(
+        path: Routes.claimSuccess,
+        builder: (context, state) => const ClaimSuccessScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

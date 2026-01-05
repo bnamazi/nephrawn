@@ -328,12 +328,10 @@ export async function acknowledgeAlert(
   }
 
   // Verify clinician is enrolled with this patient
-  const enrollment = await prisma.enrollment.findUnique({
+  const enrollment = await prisma.enrollment.findFirst({
     where: {
-      patientId_clinicianId: {
-        patientId: alert.patientId,
-        clinicianId,
-      },
+      patientId: alert.patientId,
+      clinicianId,
     },
   });
 
@@ -366,12 +364,10 @@ export async function dismissAlert(
   }
 
   // Verify clinician is enrolled with this patient
-  const enrollment = await prisma.enrollment.findUnique({
+  const enrollment = await prisma.enrollment.findFirst({
     where: {
-      patientId_clinicianId: {
-        patientId: alert.patientId,
-        clinicianId,
-      },
+      patientId: alert.patientId,
+      clinicianId,
     },
   });
 

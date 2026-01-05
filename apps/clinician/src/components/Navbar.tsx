@@ -34,6 +34,7 @@ export default function Navbar() {
 
   const navLinks = [
     { href: '/patients', label: 'Patients' },
+    { href: '/invites', label: 'Invites' },
     { href: '/alerts', label: 'Alerts', badge: openAlertCount },
   ];
 
