@@ -3,15 +3,15 @@
 ## Overview
 Implement clinic-initiated invite model for patient enrollment with DOB verification.
 
-## Phase 1: Core Enrollment (MVP-Critical)
+## Phase 1: Core Enrollment (MVP-Critical) ✅ COMPLETE
 
 ### Day 1: Schema & Migration
-- [ ] Add `Clinic` model to Prisma schema
-- [ ] Add `ClinicMembership` model (clinician-clinic relationship)
-- [ ] Add `Invite` model with code, status, expiration
-- [ ] Update `Enrollment` model with `clinicId`, `enrolledVia`, `inviteId`
-- [ ] Create migration
-- [ ] Add seed script for demo clinic + membership
+- [x] Add `Clinic` model to Prisma schema
+- [x] Add `ClinicMembership` model (clinician-clinic relationship)
+- [x] Add `Invite` model with code, status, expiration
+- [x] Update `Enrollment` model with `clinicId`, `enrolledVia`, `inviteId`
+- [x] Create migration
+- [x] Add seed script for demo clinic + membership
 
 **Files:**
 - `prisma/schema.prisma`
@@ -19,19 +19,19 @@ Implement clinic-initiated invite model for patient enrollment with DOB verifica
 - `scripts/seed-clinic.ts`
 
 ### Day 2: Backend - Invite Endpoints
-- [ ] Create `invite.service.ts` with:
+- [x] Create `invite.service.ts` with:
   - `generateInviteCode()` - crypto random 40 chars
   - `createInvite(clinicId, clinicianId, patientName, dob, email?)`
   - `getInvite(code)` - public, returns clinic name only
   - `listPendingInvites(clinicId)`
   - `revokeInvite(inviteId)`
-- [ ] Create `invite.routes.ts`:
+- [x] Create `invite.routes.ts`:
   - `POST /clinician/clinic/:clinicId/invites`
   - `GET /clinician/clinic/:clinicId/invites`
   - `DELETE /clinician/clinic/:clinicId/invites/:inviteId`
   - `GET /auth/invite/:code` (public)
-- [ ] Add clinic membership middleware check
-- [ ] Add rate limiting (50/day per clinician)
+- [x] Add clinic membership middleware check
+- [x] Add rate limiting (50/day per clinician)
 
 **Files:**
 - `src/services/invite.service.ts`
@@ -39,15 +39,15 @@ Implement clinic-initiated invite model for patient enrollment with DOB verifica
 - `src/middleware/clinicMembership.middleware.ts`
 
 ### Day 3: Backend - Claim Flow
-- [ ] Add `claimInvite(code, dob, patientId?)` to invite service
+- [x] Add `claimInvite(code, dob, patientId?)` to invite service
   - Verify DOB matches
   - Create patient if needed (or link existing)
   - Create enrollment
   - Mark invite as claimed
-- [ ] Create `POST /auth/invite/:code/claim` endpoint
-- [ ] Update `enrollment.service.ts` for clinic-aware queries
-- [ ] Update patient list queries to filter by clinic
-- [ ] Add rate limiting (5 claims/hour per IP)
+- [x] Create `POST /auth/invite/:code/claim` endpoint
+- [x] Update `enrollment.service.ts` for clinic-aware queries
+- [x] Update patient list queries to filter by clinic
+- [x] Add rate limiting (5 claims/hour per IP)
 
 **Files:**
 - `src/services/invite.service.ts` (update)
@@ -56,17 +56,17 @@ Implement clinic-initiated invite model for patient enrollment with DOB verifica
 
 ### Day 4: Frontend Integration
 **Clinician App:**
-- [ ] Add "Invite Patient" button/modal to patient list
-- [ ] Create invite form (name, DOB, optional email)
-- [ ] Show invite code with copy button
-- [ ] Add pending invites view
-- [ ] Add revoke invite action
+- [x] Add "Invite Patient" button/modal to patient list
+- [x] Create invite form (name, DOB, optional email)
+- [x] Show invite code with copy button
+- [x] Add pending invites view
+- [x] Add revoke invite action
 
 **Patient App:**
-- [ ] Add "Join Clinic" / "I have an invite code" flow
-- [ ] Create code entry screen
-- [ ] Create DOB verification screen
-- [ ] Show success confirmation with clinic name
+- [x] Add "Join Clinic" / "I have an invite code" flow
+- [x] Create code entry screen
+- [x] Create DOB verification screen
+- [x] Show success confirmation with clinic name
 
 **Files:**
 - `clinician/src/components/InvitePatientModal.tsx`
@@ -76,34 +76,34 @@ Implement clinic-initiated invite model for patient enrollment with DOB verifica
 
 ---
 
-## Phase 2: Clinic Management (Post-MVP)
+## Phase 2: Clinic Management ✅ COMPLETE
 
 ### Clinic CRUD
-- [ ] Clinic creation (admin only)
-- [ ] Clinic settings page
-- [ ] NPI and billing info
+- [x] Clinic creation (admin only - via seed/database)
+- [x] Clinic settings page
+- [ ] NPI and billing info (deferred)
 
 ### Membership Management
-- [ ] Invite clinician to clinic
-- [ ] Remove clinician from clinic
-- [ ] Role changes (owner, admin, clinician, staff)
+- [x] Add clinician to clinic (by email)
+- [x] Remove clinician from clinic
+- [x] Role changes (owner, admin, clinician, staff)
 
 ---
 
-## Phase 3: Multi-Clinic Support (Post-MVP)
+## Phase 3: Multi-Clinic Support ✅ COMPLETE
 
 ### Clinician Experience
-- [ ] Clinic switcher in header
-- [ ] Per-clinic patient lists
-- [ ] Cross-clinic patient view (if same patient at multiple clinics)
+- [x] Clinic switcher in header
+- [x] Per-clinic patient lists
+- [x] Cross-clinic patient view (if same patient at multiple clinics)
 
 ### Patient Experience
-- [ ] View enrolled clinics
-- [ ] Leave clinic (discharge self)
+- [x] View enrolled clinics
+- [ ] Leave clinic (discharge self) - deferred
 
 ---
 
-## Phase 4: Advanced Features (Post-MVP)
+## Phase 4: Advanced Features (Partial)
 
 ### Email Notifications
 - [ ] Email invite link to patient
@@ -111,12 +111,12 @@ Implement clinic-initiated invite model for patient enrollment with DOB verifica
 - [ ] Enrollment confirmation to clinician
 
 ### Invite Expiration
-- [ ] Background job to expire old invites
-- [ ] Configurable expiration per invite
+- [x] Background job to expire old invites
+- [x] Configurable expiration per invite
 
 ### Audit Trail
-- [ ] Log all invite/claim actions
-- [ ] Admin view of enrollment history
+- [x] Log all invite/claim actions
+- [x] Admin view of enrollment history
 
 ---
 
