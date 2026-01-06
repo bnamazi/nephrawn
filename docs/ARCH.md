@@ -38,6 +38,9 @@
 ### API Layer (MVP)
 - Authentication & session management
 - Patient/Clinician/Enrollment CRUD
+- Patient clinical profile (demographics, CKD stage, comorbidities, medications)
+- Care plan per enrollment (dry weight, BP targets, risk flags)
+- Profile/care plan audit trail
 - SymptomCheckin and Measurement ingestion
 - Alert generation (rule engine)
 - Clinician Notes
@@ -61,6 +64,11 @@
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/patient/me` | Get own profile |
+| GET | `/patient/profile` | Get clinical profile + completeness |
+| PUT | `/patient/profile` | Update clinical profile (patient-editable fields) |
+| GET | `/patient/profile/history` | Get profile change history |
+| GET | `/patient/clinics` | List enrolled clinics |
+| POST | `/patient/clinics/:clinicId/leave` | Self-discharge from clinic |
 | POST | `/patient/checkins` | Submit symptom check-in |
 | GET | `/patient/checkins` | List own check-ins |
 | POST | `/patient/measurements` | Submit single measurement |
@@ -82,6 +90,11 @@
 | GET | `/clinician/patients/:patientId/dashboard` | Patient dashboard overview |
 | GET | `/clinician/patients/:patientId/charts/:type` | Patient time-series data |
 | GET | `/clinician/patients/:patientId/summary/:type` | Patient measurement summary |
+| GET | `/clinician/patients/:patientId/profile` | Patient clinical profile + care plan |
+| PUT | `/clinician/patients/:patientId/profile` | Update patient profile (clinician fields) |
+| GET | `/clinician/patients/:patientId/care-plan` | Get care plan + completeness |
+| PUT | `/clinician/patients/:patientId/care-plan` | Update care plan (targets, risk flags) |
+| GET | `/clinician/patients/:patientId/profile/history` | Profile change audit trail |
 | GET | `/clinician/patients/:patientId/notes` | Patient's notes |
 | POST | `/clinician/patients/:patientId/notes` | Create note for patient |
 | GET | `/clinician/alerts` | All alerts for enrolled patients |
@@ -111,9 +124,11 @@
 
 ### Patient App (MVP)
 - Login / session management
+- Clinical profile self-entry (CKD stage self-reported, comorbidities, medications)
 - Symptom check-in form
 - Measurement entry (weight, BP)
 - View own history (read-only)
+- View enrolled clinics, self-discharge
 
 ### Clinician App (MVP)
 - Login / session management
@@ -121,6 +136,9 @@
 - Clinic settings (Owner/Admin only): member management, role changes
 - Patient list (enrolled patients)
 - Patient detail with tabs: Overview, Measurements, Symptoms, Notes
+- Patient clinical profile (CKD stage, comorbidities, medications)
+- Care plan management (dry weight, BP targets, risk flags)
+- Profile completeness banners (showTargetsBanner, showProfileBanner)
 - Symptom check-in history with severity badges
 - Alert inbox
 - Acknowledge alerts, add notes

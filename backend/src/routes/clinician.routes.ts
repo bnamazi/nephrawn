@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { AlertStatus, MeasurementType } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { logger } from "../lib/logger.js";
 import { authenticate, requireRole } from "../middleware/auth.middleware.js";
 import { logInteraction } from "../services/interaction.service.js";
 import { getCheckinsByPatient } from "../services/checkin.service.js";
@@ -27,6 +28,22 @@ import {
   getPatientDashboard,
 } from "../services/timeseries.service.js";
 import { getAuditLogs } from "../services/audit.service.js";
+import {
+  getProfile,
+  updateProfileByClinician,
+  calculateProfileCompleteness,
+  formatProfileResponse,
+  getProfileHistory,
+  ClinicianEditableFields,
+} from "../services/profile.service.js";
+import {
+  getCarePlanByPatientAndClinician,
+  updateCarePlan,
+  calculateCarePlanCompleteness,
+  formatCarePlanResponse,
+  CarePlanInput,
+} from "../services/careplan.service.js";
+import { getPatientSummary } from "../services/patientsummary.service.js";
 
 const router = Router();
 
@@ -286,6 +303,246 @@ router.get("/patients/:patientId/measurements", async (req: Request, res: Respon
     res.json({ measurements });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch patient measurements" });
+  }
+});
+
+// ============================================
+// Patient Profile & Care Plan
+// ============================================
+
+// GET /clinician/patients/:patientId/profile - Get patient's clinical profile + care plan
+router.get("/patients/:patientId/profile", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    // Verify enrollment
+    const enrollment = await prisma.enrollment.findFirst({
+      where: { patientId, clinicianId, status: "ACTIVE" },
+    });
+
+    if (!enrollment) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    const profile = await getProfile(patientId);
+    const profileCompleteness = calculateProfileCompleteness(profile);
+
+    const carePlanResult = await getCarePlanByPatientAndClinician(patientId, clinicianId);
+    const carePlanCompleteness = calculateCarePlanCompleteness(carePlanResult?.carePlan ?? null);
+
+    // Log the interaction
+    await logInteraction({
+      patientId,
+      clinicianId,
+      interactionType: "CLINICIAN_VIEW",
+      metadata: { endpoint: "GET /clinician/patients/:patientId/profile" },
+    });
+
+    res.json({
+      profile: formatProfileResponse(profile),
+      carePlan: formatCarePlanResponse(carePlanResult?.carePlan ?? null),
+      enrollment: carePlanResult?.enrollment ?? null,
+      completeness: {
+        profileScore: profileCompleteness.profileScore,
+        carePlanScore: carePlanCompleteness.carePlanScore,
+        missingCritical: [
+          ...profileCompleteness.missingCritical,
+          ...carePlanCompleteness.missingCritical,
+        ],
+      },
+      showTargetsBanner: carePlanCompleteness.showTargetsBanner,
+      showProfileBanner: profileCompleteness.showProfileBanner,
+    });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch profile");
+    res.status(500).json({ error: "Failed to fetch profile" });
+  }
+});
+
+// PUT /clinician/patients/:patientId/profile - Update patient's clinical profile
+router.put("/patients/:patientId/profile", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+    const { _changeReason, ...data } = req.body as ClinicianEditableFields & { _changeReason?: string };
+
+    // Validate height if provided
+    if (data.heightCm !== undefined) {
+      if (data.heightCm < 50 || data.heightCm > 300) {
+        res.status(400).json({ error: "heightCm must be between 50 and 300" });
+        return;
+      }
+    }
+
+    // Validate dates if provided
+    if (data.dialysisStartDate) {
+      const date = new Date(data.dialysisStartDate);
+      if (isNaN(date.getTime())) {
+        res.status(400).json({ error: "Invalid dialysisStartDate" });
+        return;
+      }
+      data.dialysisStartDate = date;
+    }
+    if (data.transplantDate) {
+      const date = new Date(data.transplantDate);
+      if (isNaN(date.getTime()) || date > new Date()) {
+        res.status(400).json({ error: "Invalid transplantDate or date is in the future" });
+        return;
+      }
+      data.transplantDate = date;
+    }
+
+    // Validate otherConditions
+    if (data.otherConditions) {
+      if (!Array.isArray(data.otherConditions)) {
+        res.status(400).json({ error: "otherConditions must be an array" });
+        return;
+      }
+      if (data.otherConditions.length > 20) {
+        res.status(400).json({ error: "otherConditions cannot have more than 20 items" });
+        return;
+      }
+      if (data.otherConditions.some((c) => typeof c !== "string" || c.length > 100)) {
+        res.status(400).json({ error: "Each condition must be a string with max 100 characters" });
+        return;
+      }
+    }
+
+    const profile = await updateProfileByClinician(patientId, clinicianId, data, _changeReason);
+
+    if (!profile) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    const completeness = calculateProfileCompleteness(profile);
+
+    res.json({
+      profile: formatProfileResponse(profile),
+      completeness,
+    });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to update profile");
+    res.status(500).json({ error: "Failed to update profile" });
+  }
+});
+
+// GET /clinician/patients/:patientId/care-plan - Get patient's care plan
+router.get("/patients/:patientId/care-plan", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const result = await getCarePlanByPatientAndClinician(patientId, clinicianId);
+
+    if (!result) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    const completeness = calculateCarePlanCompleteness(result.carePlan);
+
+    res.json({
+      carePlan: formatCarePlanResponse(result.carePlan),
+      enrollment: result.enrollment,
+      completeness,
+    });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch care plan");
+    res.status(500).json({ error: "Failed to fetch care plan" });
+  }
+});
+
+// PUT /clinician/patients/:patientId/care-plan - Update patient's care plan
+router.put("/patients/:patientId/care-plan", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+    const { _changeReason, ...data } = req.body as CarePlanInput & { _changeReason?: string };
+
+    const carePlan = await updateCarePlan(patientId, clinicianId, data, _changeReason);
+
+    if (!carePlan) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    const completeness = calculateCarePlanCompleteness(carePlan);
+
+    res.json({
+      carePlan: formatCarePlanResponse(carePlan),
+      completeness,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to update care plan";
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to update care plan");
+    res.status(400).json({ error: message });
+  }
+});
+
+// GET /clinician/patients/:patientId/profile/history - Get profile change history
+router.get("/patients/:patientId/profile/history", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    // Verify enrollment
+    const enrollment = await prisma.enrollment.findFirst({
+      where: { patientId, clinicianId, status: "ACTIVE" },
+    });
+
+    if (!enrollment) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const changes = await getProfileHistory(patientId, { limit, offset });
+
+    res.json({
+      changes: changes.map((c) => ({
+        entityType: c.entityType,
+        changedFields: c.changedFields,
+        actor: { type: c.actorType, name: c.actorName },
+        timestamp: c.timestamp.toISOString(),
+        reason: c.reason,
+      })),
+    });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch profile history");
+    res.status(500).json({ error: "Failed to fetch profile history" });
+  }
+});
+
+// GET /clinician/patients/:patientId/summary - Comprehensive patient summary
+router.get("/patients/:patientId/summary", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const summary = await getPatientSummary(patientId, clinicianId);
+
+    if (!summary) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    // Log the interaction (RPM/CCM compliance)
+    await logInteraction({
+      patientId,
+      clinicianId,
+      interactionType: "CLINICIAN_VIEW",
+      metadata: { endpoint: "GET /clinician/patients/:patientId/summary" },
+    });
+
+    res.json(summary);
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch patient summary");
+    res.status(500).json({ error: "Failed to fetch patient summary" });
   }
 });
 

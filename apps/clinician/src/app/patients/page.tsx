@@ -27,6 +27,13 @@ interface PatientsResponse {
   patients: Patient[];
 }
 
+interface PatientProfileData {
+  showProfileBanner: boolean;
+  showTargetsBanner: boolean;
+  ckdStage: string | null;
+  completenessScore: number;
+}
+
 interface InviteResponse {
   id: string;
   code: string;
@@ -48,6 +55,9 @@ export default function PatientsPage() {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [lastInvite, setLastInvite] = useState<InviteResponse | null>(null);
+
+  // Profile data for banners
+  const [profileData, setProfileData] = useState<Record<string, PatientProfileData>>({});
 
   const fetchPatients = useCallback(async () => {
     if (!selectedClinic) {
@@ -75,6 +85,41 @@ export default function PatientsPage() {
     }
   }, [router, selectedClinic]);
 
+  // Fetch profile data for all patients to show banners
+  const fetchProfileData = useCallback(async (patientIds: string[]) => {
+    const results: Record<string, PatientProfileData> = {};
+
+    await Promise.all(
+      patientIds.map(async (patientId) => {
+        try {
+          const response = await api.get<{
+            showProfileBanner: boolean;
+            showTargetsBanner: boolean;
+            profile: { ckdStageClinician: string | null } | null;
+            completeness: { profileScore: number };
+          }>(`/clinician/patients/${patientId}/profile`);
+
+          results[patientId] = {
+            showProfileBanner: response.showProfileBanner,
+            showTargetsBanner: response.showTargetsBanner,
+            ckdStage: response.profile?.ckdStageClinician || null,
+            completenessScore: response.completeness.profileScore,
+          };
+        } catch {
+          // Silently fail for individual patients - just don't show banners
+          results[patientId] = {
+            showProfileBanner: false,
+            showTargetsBanner: false,
+            ckdStage: null,
+            completenessScore: 0,
+          };
+        }
+      })
+    );
+
+    setProfileData(results);
+  }, []);
+
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/login');
@@ -84,6 +129,13 @@ export default function PatientsPage() {
       fetchPatients();
     }
   }, [isAuthenticated, router, fetchPatients, isClinicLoading]);
+
+  // Fetch profile data after patients load
+  useEffect(() => {
+    if (patients.length > 0) {
+      fetchProfileData(patients.map(p => p.id));
+    }
+  }, [patients, fetchProfileData]);
 
   const handleInviteSuccess = (invite: InviteResponse) => {
     setLastInvite(invite);
@@ -238,6 +290,10 @@ export default function PatientsPage() {
               key={patient.id}
               patient={patient}
               onClick={() => router.push(`/patients/${patient.id}`)}
+              showProfileBanner={profileData[patient.id]?.showProfileBanner}
+              showTargetsBanner={profileData[patient.id]?.showTargetsBanner}
+              ckdStage={profileData[patient.id]?.ckdStage}
+              completenessScore={profileData[patient.id]?.completenessScore}
             />
           ))}
         </div>

@@ -20,13 +20,15 @@ model Patient {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  enrollments      Enrollment[]
-  interactionLogs  InteractionLog[]
-  symptomCheckins  SymptomCheckin[]
-  measurements     Measurement[]
-  alerts           Alert[]
-  clinicianNotes   ClinicianNote[]
-  claimedInvites   Invite[]         @relation("InvitesClaimed")
+  enrollments           Enrollment[]
+  interactionLogs       InteractionLog[]
+  symptomCheckins       SymptomCheckin[]
+  measurements          Measurement[]
+  alerts                Alert[]
+  clinicianNotes        ClinicianNote[]
+  claimedInvites        Invite[]              @relation("InvitesClaimed")
+  profile               PatientProfile?
+  profileAudits         PatientProfileAudit[]
 
   @@map("patients")
 }
@@ -170,6 +172,7 @@ model Enrollment {
   clinician Clinician @relation(fields: [clinicianId], references: [id])
   clinic    Clinic    @relation(fields: [clinicId], references: [id])
   invite    Invite?   @relation(fields: [inviteId], references: [id])
+  carePlan  CarePlan?
 
   @@unique([patientId, clinicianId, clinicId])
   @@index([clinicianId, clinicId, status])
@@ -329,19 +332,187 @@ model ClinicianNote {
 // ============================================
 
 model AuditLog {
-  id          String   @id @default(uuid())
-  action      String   // e.g., 'invite.created', 'invite.revoked', 'enrollment.created'
-  actorType   String   // 'clinician', 'patient', 'system'
-  actorId     String?  // ID of the actor (null for system actions)
-  resourceType String  // 'invite', 'enrollment', 'clinic', etc.
-  resourceId  String   // ID of the affected resource
-  metadata    Json     @default("{}") // Additional context
-  ipAddress   String?  // For security auditing
-  userAgent   String?  // For security auditing
-  createdAt   DateTime @default(now())
+  id           String   @id @default(uuid())
+  action       String   // e.g., 'invite.created', 'invite.revoked', 'enrollment.created'
+  actorType    String   // 'clinician', 'patient', 'system'
+  actorId      String?  // ID of the actor (null for system actions)
+  resourceType String   // 'invite', 'enrollment', 'clinic', etc.
+  resourceId   String   // ID of the affected resource
+  metadata     Json     @default("{}") // Additional context
+  ipAddress    String?  // For security auditing
+  userAgent    String?  // For security auditing
+  createdAt    DateTime @default(now())
 
   @@index([action, createdAt])
   @@index([actorType, actorId, createdAt])
   @@index([resourceType, resourceId, createdAt])
   @@map("audit_logs")
+}
+
+// ============================================
+// Slice 5: Patient Profile & Care Plan
+// ============================================
+
+model PatientProfile {
+  id        String  @id @default(uuid())
+  patientId String  @unique
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  // Demographics
+  sex      Sex?
+  heightCm Decimal? @db.Decimal(5, 1)
+
+  // CKD Context - Dual source for safety
+  ckdStageSelfReported CkdStage?
+  ckdStageClinician    CkdStage?
+  ckdStageSetById      String?   // Clinician who set ckdStageClinician
+  ckdStageSetAt        DateTime?
+
+  primaryEtiology   KidneyDiseaseEtiology?
+  dialysisStatus    DialysisStatus         @default(NONE)
+  dialysisStartDate DateTime?              @db.Date
+  transplantStatus  TransplantStatus       @default(NONE)
+  transplantDate    DateTime?              @db.Date
+
+  // Comorbidities
+  hasHeartFailure   Boolean      @default(false)
+  heartFailureClass NyhaClass?
+  diabetesType      DiabetesType @default(NONE)
+  hasHypertension   Boolean      @default(false)
+  otherConditions   Json?        // string[]
+
+  // Medication Context (categories only, not full reconciliation)
+  onDiuretics       Boolean @default(false)
+  onAceArbInhibitor Boolean @default(false)
+  onSglt2Inhibitor  Boolean @default(false)
+  onNsaids          Boolean @default(false)
+  onMra             Boolean @default(false)
+  onInsulin         Boolean @default(false)
+  medicationNotes   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("patient_profiles")
+}
+
+model CarePlan {
+  id           String     @id @default(uuid())
+  enrollmentId String     @unique
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  // Weight Target
+  dryWeightKg Decimal? @db.Decimal(5, 2)
+
+  // BP Targets (structured ranges: { min: number, max: number })
+  targetBpSystolic  Json?
+  targetBpDiastolic Json?
+
+  // Risk Assessment
+  priorHfHospitalizations Int     @default(0)
+  fluidRetentionRisk      Boolean @default(false)
+  fallsRisk               Boolean @default(false)
+
+  // Notes
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("care_plans")
+}
+
+model PatientProfileAudit {
+  id        String @id @default(uuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  // What was changed
+  entityType AuditEntityType
+  entityId   String // profile.id or carePlan.id
+
+  // Who changed it
+  actorType ActorType
+  actorId   String // patient.id or clinician.id
+  actorName String // Denormalized for display
+
+  // What changed
+  changedFields Json    // { fieldName: { old: value, new: value } }
+  reason        String? // Optional explanation
+
+  timestamp DateTime @default(now())
+
+  @@index([patientId, timestamp])
+  @@index([entityType, entityId, timestamp])
+  @@index([actorId, actorType])
+  @@map("patient_profile_audits")
+}
+
+// ============================================
+// Patient History Enums
+// ============================================
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
+}
+
+enum CkdStage {
+  STAGE_1
+  STAGE_2
+  STAGE_3A
+  STAGE_3B
+  STAGE_4
+  STAGE_5
+  STAGE_5D    // On dialysis
+  TRANSPLANT
+  UNKNOWN
+}
+
+enum KidneyDiseaseEtiology {
+  DIABETES
+  HYPERTENSION
+  GLOMERULONEPHRITIS
+  POLYCYSTIC
+  OBSTRUCTIVE
+  OTHER
+  UNKNOWN
+}
+
+enum DialysisStatus {
+  NONE
+  HEMODIALYSIS
+  PERITONEAL_DIALYSIS
+}
+
+enum TransplantStatus {
+  NONE
+  PRIOR   // Had transplant, now failed
+  CURRENT // Functioning transplant
+}
+
+enum NyhaClass {
+  CLASS_1
+  CLASS_2
+  CLASS_3
+  CLASS_4
+}
+
+enum DiabetesType {
+  NONE
+  TYPE_1
+  TYPE_2
+}
+
+enum AuditEntityType {
+  PATIENT_PROFILE
+  CARE_PLAN
+}
+
+enum ActorType {
+  PATIENT
+  CLINICIAN
+  SYSTEM
 }

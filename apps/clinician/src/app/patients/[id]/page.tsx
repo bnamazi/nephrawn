@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, ApiError } from '@/lib/api';
-import { DashboardResponse, SymptomCheckin, CheckinsResponse } from '@/lib/types';
+import { DashboardResponse, SymptomCheckin, CheckinsResponse, ProfileResponse } from '@/lib/types';
 import MetricCard, { BloodPressureCard } from '@/components/MetricCard';
 import Card from '@/components/ui/Card';
 import SymptomBadge, { SYMPTOM_DISPLAY_NAMES } from '@/components/SymptomBadge';
@@ -17,6 +17,7 @@ export default function PatientOverviewPage() {
 
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [latestCheckin, setLatestCheckin] = useState<SymptomCheckin | null>(null);
+  const [profileData, setProfileData] = useState<ProfileResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,12 +25,14 @@ export default function PatientOverviewPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [dashboardRes, checkinsRes] = await Promise.all([
+      const [dashboardRes, checkinsRes, profileRes] = await Promise.all([
         api.get<DashboardResponse>(`/clinician/patients/${patientId}/dashboard`),
         api.get<CheckinsResponse>(`/clinician/patients/${patientId}/checkins?limit=1`),
+        api.get<ProfileResponse>(`/clinician/patients/${patientId}/profile`),
       ]);
       setDashboard(dashboardRes);
       setLatestCheckin(checkinsRes.checkins[0] || null);
+      setProfileData(profileRes);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         router.push('/login');
@@ -116,6 +119,47 @@ export default function PatientOverviewPage() {
 
   return (
     <div>
+      {/* Completeness Banners */}
+      {profileData?.showProfileBanner && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+          <svg className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div>
+            <p className="font-medium text-amber-800">Verify CKD Stage</p>
+            <p className="text-sm text-amber-700">
+              Set the clinician-verified CKD stage in the{' '}
+              <button
+                onClick={() => router.push(`/patients/${patientId}/profile`)}
+                className="underline hover:no-underline"
+              >
+                Profile tab
+              </button>.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {profileData?.showTargetsBanner && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+          <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <p className="font-medium text-blue-800">Set Care Plan Targets</p>
+            <p className="text-sm text-blue-700">
+              Configure dry weight and BP targets in the{' '}
+              <button
+                onClick={() => router.push(`/patients/${patientId}/care-plan`)}
+                className="underline hover:no-underline"
+              >
+                Care Plan tab
+              </button>.
+            </p>
+          </div>
+        </div>
+      )}
+
       <h2 className="text-lg font-semibold text-gray-900 mb-4">Health Metrics</h2>
 
       <div className="grid gap-4 sm:grid-cols-2">

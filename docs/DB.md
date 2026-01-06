@@ -101,6 +101,78 @@ The schema prioritizes:
 
 **Constraints**: Unique (patientId, clinicianId, clinicId)
 
+### PatientProfile
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| patientId | UUID | FK → Patient (unique) |
+| sex | enum | male, female, other, unspecified |
+| heightCm | decimal(5,1) | Height in centimeters |
+| ckdStageSelfReported | enum | Patient-reported CKD stage |
+| ckdStageClinician | enum | Clinician-verified CKD stage (authoritative) |
+| ckdStageSetById | UUID | FK → Clinician who set clinician stage |
+| ckdStageSetAt | timestamp | When clinician stage was set |
+| primaryEtiology | enum | diabetes, hypertension, polycystic, etc. |
+| dialysisStatus | enum | none, hemodialysis, peritoneal_dialysis |
+| dialysisStartDate | date | Nullable |
+| transplantStatus | enum | none, listed, received |
+| transplantDate | date | Nullable |
+| hasHeartFailure | boolean | |
+| heartFailureClass | enum | NYHA class (I-IV) |
+| diabetesType | enum | none, type_1, type_2 |
+| hasHypertension | boolean | |
+| otherConditions | string[] | Free-text array |
+| onDiuretics | boolean | Medication flag |
+| onAceArbInhibitor | boolean | Medication flag |
+| onSglt2Inhibitor | boolean | Medication flag |
+| onNsaids | boolean | Medication flag |
+| onMra | boolean | Medication flag |
+| onInsulin | boolean | Medication flag |
+| medicationNotes | text | Clinician-only notes |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+**Constraints**: Unique (patientId)
+
+**CKD Stage Enum Values**: STAGE_1, STAGE_2, STAGE_3A, STAGE_3B, STAGE_4, STAGE_5, STAGE_5D, TRANSPLANT, UNKNOWN
+
+**Design Note**: Dual CKD stage tracking (self-reported + clinician) enables safety comparison. Alerts use `ckdStageClinician ?? ckdStageSelfReported` for "effective" stage.
+
+### CarePlan
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| enrollmentId | UUID | FK → Enrollment (unique) |
+| dryWeightKg | decimal(5,2) | Target dry weight in kg |
+| targetBpSystolic | JSONB | `{ min: number, max: number }` |
+| targetBpDiastolic | JSONB | `{ min: number, max: number }` |
+| priorHfHospitalizations | integer | Heart failure history |
+| fluidRetentionRisk | boolean | Flag for alert sensitivity |
+| fallsRisk | boolean | Flag for mobility concerns |
+| notes | text | Clinician notes |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+**Constraints**: Unique (enrollmentId)
+
+**Design Note**: CarePlan is per-enrollment, allowing different targets across clinics. This supports multi-clinic patients with different care protocols.
+
+### PatientProfileAudit
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| patientId | UUID | FK → Patient |
+| entityType | enum | PATIENT_PROFILE, CARE_PLAN |
+| entityId | UUID | ID of the modified entity |
+| actorType | enum | PATIENT, CLINICIAN, SYSTEM |
+| actorId | UUID | Who made the change |
+| actorName | string | Display name at time of change |
+| changedFields | JSONB | `{ field: { old: value, new: value } }` |
+| reason | text | Nullable; optional explanation |
+| timestamp | timestamp | |
+
+**Design Note**: Comprehensive audit trail for clinical data changes. Stores diff of changed fields for explainability.
+
 ### SymptomCheckin
 | Field | Type | Notes |
 |-------|------|-------|
@@ -230,13 +302,18 @@ Clinician ───┬───── many ClinicMemberships ───── Cli
              ├───── many ClinicianNotes
              └───── many Alerts (via acknowledgedBy)
 
-Patient ─────┬───── many SymptomCheckins
+Patient ─────┬───── one PatientProfile
+             ├───── many SymptomCheckins
              ├───── many Measurements
              ├───── many Alerts
              ├───── many InteractionLogs
              ├───── many ClinicianNotes
+             ├───── many PatientProfileAudits
              ├───── many Enrollments ───── Clinician + Clinic
              └───── many Invites (claimed)
+
+Enrollment ──┬───── one CarePlan
+             └───── many PatientProfileAudits (via entityId)
 
 Invite ──────┬───── one Clinic
              ├───── one Clinician (createdBy)
@@ -264,6 +341,9 @@ Alert ─────── many ClinicianNotes (via alertId)
 | Alert | (patientId, status, triggeredAt) | Alert inbox |
 | InteractionLog | (patientId, timestamp) | RPM/CCM monthly summaries |
 | InteractionLog | (clinicianId, timestamp) | Clinician activity reports |
+| PatientProfile | (patientId) | One-to-one with Patient |
+| CarePlan | (enrollmentId) | One-to-one with Enrollment |
+| PatientProfileAudit | (patientId, timestamp) | Profile change history |
 
 ---
 
@@ -354,3 +434,9 @@ Two-layer deduplication prevents duplicate data from corrupting trends:
 | Invite code (40 chars) | ~10^48 combinations; unguessable |
 | DOB verification on claim | Identity verification without global patient search |
 | enrolledVia on Enrollment | Audit trail for how enrollment was created |
+| PatientProfile separate from Patient | Clinical data evolves separately from auth; better audit trail |
+| CarePlan per-enrollment | Multi-clinic patients can have different targets per clinic |
+| Dual CKD stage tracking | Safety: clinician can verify self-reported stage |
+| BP targets as min/max range | Supports personalized targets per KDIGO guidelines |
+| PatientProfileAudit with changedFields | Explainability: see exactly what changed |
+| actorName in audit | Preserves identity even if clinician is deleted |

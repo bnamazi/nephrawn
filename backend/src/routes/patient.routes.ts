@@ -15,6 +15,14 @@ import {
   getPatientDashboard,
 } from "../services/timeseries.service.js";
 import { logAudit } from "../services/audit.service.js";
+import {
+  getProfile,
+  updateProfileByPatient,
+  calculateProfileCompleteness,
+  formatProfileResponse,
+  getProfileHistory,
+  PatientEditableFields,
+} from "../services/profile.service.js";
 
 const router = Router();
 
@@ -45,6 +53,112 @@ router.get("/me", async (req: Request, res: Response) => {
     res.json({ patient });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch patient profile" });
+  }
+});
+
+// ============================================
+// Clinical Profile
+// ============================================
+
+// GET /patient/profile - Get own clinical profile
+router.get("/profile", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const profile = await getProfile(patientId);
+    const completeness = calculateProfileCompleteness(profile);
+
+    res.json({
+      profile: formatProfileResponse(profile),
+      completeness,
+    });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch profile");
+    res.status(500).json({ error: "Failed to fetch profile" });
+  }
+});
+
+// PUT /patient/profile - Update own clinical profile
+router.put("/profile", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const data = req.body as PatientEditableFields;
+
+    // Validate height if provided
+    if (data.heightCm !== undefined) {
+      if (data.heightCm < 50 || data.heightCm > 300) {
+        res.status(400).json({ error: "heightCm must be between 50 and 300" });
+        return;
+      }
+    }
+
+    // Validate dates if provided
+    if (data.dialysisStartDate) {
+      const date = new Date(data.dialysisStartDate);
+      if (isNaN(date.getTime())) {
+        res.status(400).json({ error: "Invalid dialysisStartDate" });
+        return;
+      }
+      data.dialysisStartDate = date;
+    }
+    if (data.transplantDate) {
+      const date = new Date(data.transplantDate);
+      if (isNaN(date.getTime()) || date > new Date()) {
+        res.status(400).json({ error: "Invalid transplantDate or date is in the future" });
+        return;
+      }
+      data.transplantDate = date;
+    }
+
+    // Validate otherConditions
+    if (data.otherConditions) {
+      if (!Array.isArray(data.otherConditions)) {
+        res.status(400).json({ error: "otherConditions must be an array" });
+        return;
+      }
+      if (data.otherConditions.length > 20) {
+        res.status(400).json({ error: "otherConditions cannot have more than 20 items" });
+        return;
+      }
+      if (data.otherConditions.some((c) => typeof c !== "string" || c.length > 100)) {
+        res.status(400).json({ error: "Each condition must be a string with max 100 characters" });
+        return;
+      }
+    }
+
+    const profile = await updateProfileByPatient(patientId, data);
+    const completeness = calculateProfileCompleteness(profile);
+
+    res.json({
+      profile: formatProfileResponse(profile),
+      completeness,
+    });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to update profile");
+    res.status(500).json({ error: "Failed to update profile" });
+  }
+});
+
+// GET /patient/profile/history - Get own profile change history
+router.get("/profile/history", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const changes = await getProfileHistory(patientId, { limit, offset });
+
+    res.json({
+      changes: changes.map((c) => ({
+        entityType: c.entityType,
+        changedFields: c.changedFields,
+        actor: { type: c.actorType, name: c.actorName },
+        timestamp: c.timestamp.toISOString(),
+        reason: c.reason,
+      })),
+    });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch profile history");
+    res.status(500).json({ error: "Failed to fetch profile history" });
   }
 });
 

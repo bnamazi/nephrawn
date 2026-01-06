@@ -242,6 +242,141 @@ async function main() {
 
   console.log("Created enrollments");
 
+  // Get enrollment IDs for care plan creation
+  const enrollment1 = await prisma.enrollment.findFirst({
+    where: { patientId: patient1.id, clinicianId: clinician1.id, clinicId: clinic.id },
+  });
+  const enrollment2 = await prisma.enrollment.findFirst({
+    where: { patientId: patient2.id, clinicianId: clinician1.id, clinicId: clinic.id },
+  });
+  const enrollment4 = await prisma.enrollment.findFirst({
+    where: { patientId: patient4.id, clinicianId: clinician2.id, clinicId: clinic.id },
+  });
+
+  // Create patient profiles
+  await prisma.patientProfile.upsert({
+    where: { patientId: patient1.id },
+    update: {},
+    create: {
+      patientId: patient1.id,
+      sex: "MALE",
+      heightCm: 178,
+      ckdStageSelfReported: "STAGE_4",
+      ckdStageClinician: "STAGE_4",
+      ckdStageSetById: clinician1.id,
+      ckdStageSetAt: new Date(),
+      primaryEtiology: "DIABETES",
+      dialysisStatus: "NONE",
+      hasHeartFailure: true,
+      heartFailureClass: "CLASS_2",
+      diabetesType: "TYPE_2",
+      hasHypertension: true,
+      onDiuretics: true,
+      onAceArbInhibitor: true,
+      onSglt2Inhibitor: true,
+      onInsulin: true,
+    },
+  });
+
+  await prisma.patientProfile.upsert({
+    where: { patientId: patient2.id },
+    update: {},
+    create: {
+      patientId: patient2.id,
+      sex: "FEMALE",
+      heightCm: 165,
+      ckdStageSelfReported: "STAGE_3B",
+      ckdStageClinician: "STAGE_3B",
+      ckdStageSetById: clinician1.id,
+      ckdStageSetAt: new Date(),
+      primaryEtiology: "HYPERTENSION",
+      dialysisStatus: "NONE",
+      hasHeartFailure: false,
+      diabetesType: "NONE",
+      hasHypertension: true,
+      onDiuretics: false,
+      onAceArbInhibitor: true,
+    },
+  });
+
+  await prisma.patientProfile.upsert({
+    where: { patientId: patient4.id },
+    update: {},
+    create: {
+      patientId: patient4.id,
+      sex: "FEMALE",
+      heightCm: 160,
+      ckdStageSelfReported: "STAGE_5D",
+      ckdStageClinician: "STAGE_5D",
+      ckdStageSetById: clinician2.id,
+      ckdStageSetAt: new Date(),
+      primaryEtiology: "POLYCYSTIC",
+      dialysisStatus: "HEMODIALYSIS",
+      dialysisStartDate: new Date("2023-06-01"),
+      hasHeartFailure: true,
+      heartFailureClass: "CLASS_3",
+      diabetesType: "NONE",
+      hasHypertension: true,
+      onDiuretics: true,
+      onMra: true,
+    },
+  });
+
+  console.log("Created patient profiles");
+
+  // Create care plans for active enrollments
+  if (enrollment1) {
+    await prisma.carePlan.upsert({
+      where: { enrollmentId: enrollment1.id },
+      update: {},
+      create: {
+        enrollmentId: enrollment1.id,
+        dryWeightKg: 85.0,
+        targetBpSystolic: { min: 110, max: 130 },
+        targetBpDiastolic: { min: 60, max: 80 },
+        priorHfHospitalizations: 1,
+        fluidRetentionRisk: true,
+        fallsRisk: false,
+        notes: "Monitor for fluid overload. Patient has history of peripheral edema.",
+      },
+    });
+  }
+
+  if (enrollment2) {
+    await prisma.carePlan.upsert({
+      where: { enrollmentId: enrollment2.id },
+      update: {},
+      create: {
+        enrollmentId: enrollment2.id,
+        dryWeightKg: 68.0,
+        targetBpSystolic: { min: 100, max: 130 },
+        targetBpDiastolic: { min: 60, max: 85 },
+        fluidRetentionRisk: false,
+        fallsRisk: false,
+        notes: "Well-controlled BP. Continue current regimen.",
+      },
+    });
+  }
+
+  if (enrollment4) {
+    await prisma.carePlan.upsert({
+      where: { enrollmentId: enrollment4.id },
+      update: {},
+      create: {
+        enrollmentId: enrollment4.id,
+        dryWeightKg: 58.5,
+        targetBpSystolic: { min: 100, max: 140 },
+        targetBpDiastolic: { min: 60, max: 90 },
+        priorHfHospitalizations: 2,
+        fluidRetentionRisk: true,
+        fallsRisk: true,
+        notes: "HD patient. Strict fluid management. History of falls - mobility assessment recommended.",
+      },
+    });
+  }
+
+  console.log("Created care plans");
+
   console.log("\n--- Test Credentials ---");
   console.log("Clinician 1: clinician1@test.com / password123");
   console.log("Clinician 2: clinician2@test.com / password123");

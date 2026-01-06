@@ -195,3 +195,242 @@ export interface SymptomCheckin {
 export interface CheckinsResponse {
   checkins: SymptomCheckin[];
 }
+
+// ============================================
+// Profile Types
+// ============================================
+
+export type CkdStage =
+  | 'STAGE_1' | 'STAGE_2' | 'STAGE_3A' | 'STAGE_3B'
+  | 'STAGE_4' | 'STAGE_5' | 'STAGE_5D' | 'TRANSPLANT' | 'UNKNOWN';
+
+export type DialysisStatus = 'NONE' | 'HEMODIALYSIS' | 'PERITONEAL_DIALYSIS';
+export type TransplantStatus = 'NONE' | 'LISTED' | 'RECEIVED';
+export type DiabetesType = 'NONE' | 'TYPE_1' | 'TYPE_2';
+export type NyhaClass = 'CLASS_1' | 'CLASS_2' | 'CLASS_3' | 'CLASS_4';
+export type KidneyDiseaseEtiology =
+  | 'DIABETES' | 'HYPERTENSION' | 'GLOMERULONEPHRITIS'
+  | 'POLYCYSTIC' | 'OBSTRUCTIVE' | 'OTHER' | 'UNKNOWN';
+export type Sex = 'MALE' | 'FEMALE' | 'OTHER' | 'UNSPECIFIED';
+
+export interface PatientProfile {
+  id: string;
+  patientId: string;
+  sex: Sex | null;
+  heightCm: number | null;
+  heightDisplay: string | null;
+  ckdStageSelfReported: CkdStage | null;
+  ckdStageClinician: CkdStage | null;
+  ckdStageEffective: CkdStage | null;
+  ckdStageEffectiveLabel: string;
+  ckdStageSource: 'clinician' | 'self_reported' | null;
+  primaryEtiology: KidneyDiseaseEtiology | null;
+  primaryEtiologyLabel: string | null;
+  dialysisStatus: DialysisStatus;
+  dialysisStatusLabel: string;
+  dialysisStartDate: string | null;
+  transplantStatus: TransplantStatus;
+  transplantDate: string | null;
+  hasHeartFailure: boolean;
+  heartFailureClass: NyhaClass | null;
+  heartFailureLabel: string | null;
+  diabetesType: DiabetesType;
+  diabetesLabel: string;
+  hasHypertension: boolean;
+  otherConditions: string[];
+  medications: {
+    onDiuretics: boolean;
+    onAceArbInhibitor: boolean;
+    onSglt2Inhibitor: boolean;
+    onNsaids: boolean;
+    onMra: boolean;
+    onInsulin: boolean;
+  };
+  medicationNotes: string | null;
+  updatedAt: string;
+}
+
+export interface ProfileCompleteness {
+  profileScore: number;
+  carePlanScore: number;
+  missingCritical: string[];
+}
+
+export interface ProfileResponse {
+  profile: PatientProfile | null;
+  carePlan: CarePlan | null;
+  enrollment: {
+    id: string;
+    clinicId: string;
+    clinicName: string;
+  } | null;
+  completeness: ProfileCompleteness;
+  showTargetsBanner: boolean;
+  showProfileBanner: boolean;
+}
+
+// ============================================
+// Care Plan Types
+// ============================================
+
+export interface BpRange {
+  min: number;
+  max: number;
+}
+
+export interface CarePlan {
+  id: string;
+  enrollmentId: string;
+  dryWeightKg: number | null;
+  dryWeightLbs: number | null;
+  targetBpSystolic: BpRange | null;
+  targetBpDiastolic: BpRange | null;
+  priorHfHospitalizations: number | null;
+  fluidRetentionRisk: boolean;
+  fallsRisk: boolean;
+  notes: string | null;
+  updatedAt: string;
+}
+
+export interface CarePlanCompleteness {
+  carePlanScore: number;
+  missingCritical: string[];
+  showTargetsBanner: boolean;
+}
+
+export interface CarePlanResponse {
+  carePlan: CarePlan | null;
+  enrollment: {
+    id: string;
+    clinicId: string;
+    clinicName: string;
+  };
+  completeness: CarePlanCompleteness;
+}
+
+// ============================================
+// Audit History Types
+// ============================================
+
+export interface AuditChange {
+  entityType: 'PATIENT_PROFILE' | 'CARE_PLAN';
+  changedFields: Record<string, { old: unknown; new: unknown }>;
+  actor: {
+    type: 'PATIENT' | 'CLINICIAN' | 'SYSTEM';
+    name: string;
+  };
+  timestamp: string;
+  reason: string | null;
+}
+
+export interface AuditHistoryResponse {
+  changes: AuditChange[];
+}
+
+// ============================================
+// Patient Summary Types
+// ============================================
+
+export interface PatientSummary {
+  patient: {
+    id: string;
+    name: string;
+    dateOfBirth: string;
+  };
+  enrollment: {
+    id: string;
+    clinicId: string;
+    clinicName: string;
+    isPrimary: boolean;
+    enrolledAt: string;
+  };
+  latestMeasurements: {
+    weight: { value: number; unit: string; timestamp: string } | null;
+    systolic: { value: number; unit: string; timestamp: string } | null;
+    diastolic: { value: number; unit: string; timestamp: string } | null;
+    spo2: { value: number; unit: string; timestamp: string } | null;
+    heartRate: { value: number; unit: string; timestamp: string } | null;
+  };
+  profile: PatientProfile | null;
+  carePlan: CarePlan | null;
+  completeness: {
+    profileScore: number;
+    carePlanScore: number;
+    overallScore: number;
+    missingCritical: string[];
+  };
+  banners: {
+    showTargetsBanner: boolean;
+    showProfileBanner: boolean;
+  };
+  alerts: {
+    openCount: number;
+    criticalCount: number;
+    latestTriggeredAt: string | null;
+  };
+  lastActivity: {
+    lastCheckinAt: string | null;
+    lastMeasurementAt: string | null;
+  };
+  meta: {
+    generatedAt: string;
+  };
+}
+
+// ============================================
+// Display Labels
+// ============================================
+
+export const CKD_STAGE_LABELS: Record<CkdStage, string> = {
+  STAGE_1: 'Stage 1 (GFR ≥90)',
+  STAGE_2: 'Stage 2 (GFR 60-89)',
+  STAGE_3A: 'Stage 3a (GFR 45-59)',
+  STAGE_3B: 'Stage 3b (GFR 30-44)',
+  STAGE_4: 'Stage 4 (GFR 15-29)',
+  STAGE_5: 'Stage 5 (GFR <15)',
+  STAGE_5D: 'Stage 5D (Dialysis)',
+  TRANSPLANT: 'Transplant',
+  UNKNOWN: 'Unknown',
+};
+
+export const DIALYSIS_STATUS_LABELS: Record<DialysisStatus, string> = {
+  NONE: 'Not on dialysis',
+  HEMODIALYSIS: 'Hemodialysis',
+  PERITONEAL_DIALYSIS: 'Peritoneal Dialysis',
+};
+
+export const TRANSPLANT_STATUS_LABELS: Record<TransplantStatus, string> = {
+  NONE: 'None',
+  LISTED: 'Listed for transplant',
+  RECEIVED: 'Transplant received',
+};
+
+export const DIABETES_LABELS: Record<DiabetesType, string> = {
+  NONE: 'None',
+  TYPE_1: 'Type 1',
+  TYPE_2: 'Type 2',
+};
+
+export const NYHA_LABELS: Record<NyhaClass, string> = {
+  CLASS_1: 'Class I - No limitation',
+  CLASS_2: 'Class II - Slight limitation',
+  CLASS_3: 'Class III - Marked limitation',
+  CLASS_4: 'Class IV - Severe limitation',
+};
+
+export const ETIOLOGY_LABELS: Record<KidneyDiseaseEtiology, string> = {
+  DIABETES: 'Diabetic Nephropathy',
+  HYPERTENSION: 'Hypertensive Nephrosclerosis',
+  GLOMERULONEPHRITIS: 'Glomerulonephritis',
+  POLYCYSTIC: 'Polycystic Kidney Disease',
+  OBSTRUCTIVE: 'Obstructive Uropathy',
+  OTHER: 'Other',
+  UNKNOWN: 'Unknown',
+};
+
+export const SEX_LABELS: Record<Sex, string> = {
+  MALE: 'Male',
+  FEMALE: 'Female',
+  OTHER: 'Other',
+  UNSPECIFIED: 'Not specified',
+};
