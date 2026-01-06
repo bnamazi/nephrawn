@@ -104,3 +104,16 @@ Consequence:
 - No need for email verification (though optional)
 - Minimal PII in invite record
 - Combined with invite code, provides reasonable assurance
+
+## 2025-01 — Role-based clinic member management
+Context: Clinics need to manage their team members with appropriate access controls.
+Decision: Implement hierarchical role system (Owner > Admin > Clinician > Staff) with role-based permissions:
+- **Owner**: Full control, can assign any role, cannot be removed
+- **Admin**: Can add/remove Clinician/Staff, cannot modify other Admins or Owner
+- **Clinician/Staff**: No member management access
+Consequence:
+- Clear permission hierarchy prevents privilege escalation
+- Settings access (gear icon) only visible to Owner/Admin
+- Role badges in UI provide visibility into permissions
+- No clinician invite system needed; add by email is sufficient
+- Ownership transfer not supported (keeps model simple)

@@ -97,6 +97,12 @@
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/clinician/clinics` | List clinician's clinic memberships |
+| GET | `/clinician/clinic/:clinicId` | Get clinic details (Owner/Admin) |
+| PUT | `/clinician/clinic/:clinicId` | Update clinic info (Owner/Admin) |
+| GET | `/clinician/clinic/:clinicId/members` | List clinic members (Owner/Admin) |
+| POST | `/clinician/clinic/:clinicId/members` | Add clinician to clinic (Owner/Admin) |
+| PUT | `/clinician/clinic/:clinicId/members/:clinicianId/role` | Update member role (Owner/Admin) |
+| DELETE | `/clinician/clinic/:clinicId/members/:clinicianId` | Remove member from clinic (Owner/Admin) |
 | GET | `/clinician/clinic/:clinicId/invites` | List pending invites for clinic |
 | POST | `/clinician/clinic/:clinicId/invites` | Create new patient invite |
 | DELETE | `/clinician/clinic/:clinicId/invites/:inviteId` | Revoke pending invite |
@@ -111,6 +117,8 @@
 
 ### Clinician App (MVP)
 - Login / session management
+- Clinic switcher (multi-clinic support)
+- Clinic settings (Owner/Admin only): member management, role changes
 - Patient list (enrolled patients)
 - Patient detail with timeline
 - Alert inbox

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Card from './ui/Card';
+import { getToken } from '@/lib/api';
 
 interface InvitePatientModalProps {
   isOpen: boolean;
@@ -36,7 +37,7 @@ export function InvitePatientModal({ isOpen, onClose, onSuccess, clinicId }: Inv
     setIsLoading(true);
 
     try {
-      const token = sessionStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/clinician/clinic/${clinicId}/invites`,
         {
