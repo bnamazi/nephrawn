@@ -120,7 +120,8 @@
 - Clinic switcher (multi-clinic support)
 - Clinic settings (Owner/Admin only): member management, role changes
 - Patient list (enrolled patients)
-- Patient detail with timeline
+- Patient detail with tabs: Overview, Measurements, Symptoms, Notes
+- Symptom check-in history with severity badges
 - Alert inbox
 - Acknowledge alerts, add notes
 - Time-series charts

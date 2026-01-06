@@ -15,6 +15,7 @@ interface PatientLayoutProps {
 const TABS = [
   { label: 'Overview', href: '' },
   { label: 'Measurements', href: '/measurements' },
+  { label: 'Symptoms', href: '/symptoms' },
   { label: 'Notes', href: '/notes' },
 ];
 

@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, ApiError } from '@/lib/api';
-import { DashboardResponse } from '@/lib/types';
+import { DashboardResponse, SymptomCheckin, CheckinsResponse } from '@/lib/types';
 import MetricCard, { BloodPressureCard } from '@/components/MetricCard';
+import Card from '@/components/ui/Card';
+import SymptomBadge, { SYMPTOM_DISPLAY_NAMES } from '@/components/SymptomBadge';
 
 export default function PatientOverviewPage() {
   const router = useRouter();
@@ -14,17 +16,20 @@ export default function PatientOverviewPage() {
   const patientId = params.id as string;
 
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+  const [latestCheckin, setLatestCheckin] = useState<SymptomCheckin | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchDashboard = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await api.get<DashboardResponse>(
-        `/clinician/patients/${patientId}/dashboard`
-      );
-      setDashboard(response);
+      const [dashboardRes, checkinsRes] = await Promise.all([
+        api.get<DashboardResponse>(`/clinician/patients/${patientId}/dashboard`),
+        api.get<CheckinsResponse>(`/clinician/patients/${patientId}/checkins?limit=1`),
+      ]);
+      setDashboard(dashboardRes);
+      setLatestCheckin(checkinsRes.checkins[0] || null);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         router.push('/login');
@@ -41,8 +46,8 @@ export default function PatientOverviewPage() {
       router.push('/login');
       return;
     }
-    fetchDashboard();
-  }, [isAuthenticated, router, fetchDashboard]);
+    fetchData();
+  }, [isAuthenticated, router, fetchData]);
 
   if (!isAuthenticated) {
     return null;
@@ -97,7 +102,7 @@ export default function PatientOverviewPage() {
           </svg>
           <p className="text-gray-600">{error}</p>
           <button
-            onClick={fetchDashboard}
+            onClick={fetchData}
             className="text-blue-600 hover:text-blue-800"
           >
             Try again
@@ -147,6 +152,79 @@ export default function PatientOverviewPage() {
           onClick={() => router.push(`/patients/${patientId}/measurements?metric=HEART_RATE`)}
         />
       </div>
+
+      {/* Latest Symptoms */}
+      <h2 className="text-lg font-semibold text-gray-900 mb-4 mt-8">Latest Symptoms</h2>
+      <Card
+        padding="md"
+        hover
+        onClick={() => router.push(`/patients/${patientId}/symptoms`)}
+        className="cursor-pointer"
+      >
+        {latestCheckin ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-500">
+                {new Date(latestCheckin.timestamp).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
+              </span>
+              <span className="text-xs text-blue-600">View all &rarr;</span>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {latestCheckin.symptoms.edema && (
+                <SymptomBadge
+                  name={SYMPTOM_DISPLAY_NAMES.edema}
+                  severity={latestCheckin.symptoms.edema.severity}
+                  extra={latestCheckin.symptoms.edema.location}
+                />
+              )}
+              {latestCheckin.symptoms.fatigue && (
+                <SymptomBadge
+                  name={SYMPTOM_DISPLAY_NAMES.fatigue}
+                  severity={latestCheckin.symptoms.fatigue.severity}
+                />
+              )}
+              {latestCheckin.symptoms.shortnessOfBreath && (
+                <SymptomBadge
+                  name={SYMPTOM_DISPLAY_NAMES.shortnessOfBreath}
+                  severity={latestCheckin.symptoms.shortnessOfBreath.severity}
+                  extra={latestCheckin.symptoms.shortnessOfBreath.atRest ? 'at rest' : undefined}
+                />
+              )}
+              {latestCheckin.symptoms.nausea && (
+                <SymptomBadge
+                  name={SYMPTOM_DISPLAY_NAMES.nausea}
+                  severity={latestCheckin.symptoms.nausea.severity}
+                />
+              )}
+              {latestCheckin.symptoms.appetite && (
+                <SymptomBadge
+                  name={SYMPTOM_DISPLAY_NAMES.appetite}
+                  severity={latestCheckin.symptoms.appetite.level}
+                  isAppetite
+                />
+              )}
+              {latestCheckin.symptoms.pain && (
+                <SymptomBadge
+                  name={SYMPTOM_DISPLAY_NAMES.pain}
+                  severity={latestCheckin.symptoms.pain.severity}
+                  extra={latestCheckin.symptoms.pain.location}
+                />
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4">
+            <p className="text-gray-500 text-sm">No symptom check-ins yet</p>
+            <p className="text-xs text-gray-400 mt-1">Click to view symptoms page</p>
+          </div>
+        )}
+      </Card>
 
       {data?.meta && (
         <p className="text-xs text-gray-400 mt-6 text-center">

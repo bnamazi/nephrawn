@@ -172,3 +172,26 @@ export interface NotesResponse {
 export interface NoteResponse {
   note: ClinicianNote;
 }
+
+// Symptom check-in types
+export interface SymptomData {
+  edema?: { severity: number; location?: string };
+  fatigue?: { severity: number };
+  shortnessOfBreath?: { severity: number; atRest?: boolean };
+  nausea?: { severity: number };
+  appetite?: { level: number };
+  pain?: { severity: number; location?: string };
+}
+
+export interface SymptomCheckin {
+  id: string;
+  patientId: string;
+  timestamp: string;
+  symptoms: SymptomData;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface CheckinsResponse {
+  checkins: SymptomCheckin[];
+}
