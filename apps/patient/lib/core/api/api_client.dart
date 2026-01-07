@@ -49,6 +49,19 @@ class ApiClient {
       throw ApiException.fromDioException(e);
     }
   }
+
+  /// PUT request
+  Future<Map<String, dynamic>> put(
+    String path, {
+    Map<String, dynamic>? data,
+  }) async {
+    try {
+      final response = await _dio.put(path, data: data);
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
 }
 
 /// Interceptor to attach JWT token to requests

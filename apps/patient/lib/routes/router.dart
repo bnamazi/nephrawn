@@ -16,6 +16,8 @@ import '../features/join_clinic/join_clinic_screen.dart';
 import '../features/join_clinic/claim_invite_screen.dart';
 import '../features/join_clinic/claim_success_screen.dart';
 import '../features/clinics/clinics_screen.dart';
+import '../features/clinical_profile/clinical_profile_screen.dart';
+import '../features/clinical_profile/clinical_profile_edit_screen.dart';
 
 /// Route paths
 class Routes {
@@ -36,6 +38,9 @@ class Routes {
   static const String joinClinic = '/join-clinic';
   static const String claimInvite = '/claim-invite';
   static const String claimSuccess = '/claim-success';
+  // Health profile
+  static const String healthProfile = '/health-profile';
+  static const String editHealthProfile = '/edit-health-profile';
 }
 
 /// Create app router with auth guards
@@ -132,6 +137,14 @@ GoRouter createRouter(AuthProvider authProvider) {
       GoRoute(
         path: Routes.claimSuccess,
         builder: (context, state) => const ClaimSuccessScreen(),
+      ),
+      GoRoute(
+        path: Routes.healthProfile,
+        builder: (context, state) => const ClinicalProfileScreen(),
+      ),
+      GoRoute(
+        path: Routes.editHealthProfile,
+        builder: (context, state) => const ClinicalProfileEditScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

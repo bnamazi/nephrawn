@@ -16,6 +16,10 @@ class ApiEndpoints {
   static const String alerts = '/patient/alerts';
   static const String dashboard = '/patient/dashboard';
 
+  // Clinical profile endpoints
+  static const String clinicalProfile = '/patient/profile';
+  static const String clinicalProfileHistory = '/patient/profile/history';
+
   /// Leave a clinic
   static String leaveClinic(String clinicId) => '/patient/clinics/$clinicId/leave';
 

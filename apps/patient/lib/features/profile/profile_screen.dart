@@ -120,6 +120,18 @@ class _ProfileScreenContent extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
+                // Health Profile link
+                Card(
+                  child: ListTile(
+                    leading: Icon(Icons.medical_information_outlined, color: Theme.of(context).primaryColor),
+                    title: const Text('Health Profile'),
+                    subtitle: const Text('CKD stage, conditions, and medications'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/health-profile'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+
                 // My Clinics link
                 Card(
                   child: ListTile(
