@@ -18,6 +18,9 @@ import '../features/join_clinic/claim_success_screen.dart';
 import '../features/clinics/clinics_screen.dart';
 import '../features/clinical_profile/clinical_profile_screen.dart';
 import '../features/clinical_profile/clinical_profile_edit_screen.dart';
+import '../features/medications/medications_screen.dart';
+import '../features/medications/medication_entry_screen.dart';
+import '../features/medications/medication_detail_screen.dart';
 
 /// Route paths
 class Routes {
@@ -41,6 +44,10 @@ class Routes {
   // Health profile
   static const String healthProfile = '/health-profile';
   static const String editHealthProfile = '/edit-health-profile';
+  // Medications
+  static const String medications = '/medications';
+  static const String addMedication = '/add-medication';
+  static const String medicationDetail = '/medication';
 }
 
 /// Create app router with auth guards
@@ -145,6 +152,21 @@ GoRouter createRouter(AuthProvider authProvider) {
       GoRoute(
         path: Routes.editHealthProfile,
         builder: (context, state) => const ClinicalProfileEditScreen(),
+      ),
+      GoRoute(
+        path: Routes.medications,
+        builder: (context, state) => const MedicationsScreen(),
+      ),
+      GoRoute(
+        path: Routes.addMedication,
+        builder: (context, state) => const MedicationEntryScreen(),
+      ),
+      GoRoute(
+        path: '${Routes.medicationDetail}/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return MedicationDetailScreen(medicationId: id);
+        },
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

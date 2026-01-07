@@ -3,7 +3,7 @@ import { MeasurementType } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { logger } from "../lib/logger.js";
 import { authenticate, requireRole } from "../middleware/auth.middleware.js";
-import { symptomCheckinSchema, measurementSchema, bloodPressureSchema } from "../lib/validation.js";
+import { symptomCheckinSchema, measurementSchema, bloodPressureSchema, medicationSchema, medicationUpdateSchema, adherenceLogSchema } from "../lib/validation.js";
 import { createCheckin, getCheckinsByPatient } from "../services/checkin.service.js";
 import { createMeasurement, getMeasurementsByPatient } from "../services/measurement.service.js";
 import { getAlertsByPatient } from "../services/alert.service.js";
@@ -23,6 +23,16 @@ import {
   getProfileHistory,
   PatientEditableFields,
 } from "../services/profile.service.js";
+import {
+  listMedications,
+  getMedication,
+  createMedication,
+  updateMedication,
+  deleteMedication,
+  logAdherence,
+  getAdherenceLogs,
+  getAdherenceSummary,
+} from "../services/medication.service.js";
 
 const router = Router();
 
@@ -159,6 +169,196 @@ router.get("/profile/history", async (req: Request, res: Response) => {
   } catch (error) {
     logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch profile history");
     res.status(500).json({ error: "Failed to fetch profile history" });
+  }
+});
+
+// ============================================
+// Medications
+// ============================================
+
+// GET /patient/medications - List own medications
+router.get("/medications", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const includeInactive = req.query.includeInactive === "true";
+
+    const medications = await listMedications(patientId, includeInactive);
+
+    res.json({ medications });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch medications");
+    res.status(500).json({ error: "Failed to fetch medications" });
+  }
+});
+
+// GET /patient/medications/summary - Get adherence summary
+router.get("/medications/summary", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const days = parseInt(req.query.days as string) || 30;
+
+    const summary = await getAdherenceSummary(patientId, days);
+
+    res.json({ summary });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch adherence summary");
+    res.status(500).json({ error: "Failed to fetch adherence summary" });
+  }
+});
+
+// GET /patient/medications/:id - Get single medication
+router.get("/medications/:id", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { id } = req.params;
+
+    const medication = await getMedication(id, patientId);
+
+    if (!medication) {
+      res.status(404).json({ error: "Medication not found" });
+      return;
+    }
+
+    res.json({ medication });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch medication");
+    res.status(500).json({ error: "Failed to fetch medication" });
+  }
+});
+
+// POST /patient/medications - Create medication
+router.post("/medications", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const parsed = medicationSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.issues });
+      return;
+    }
+
+    const medication = await createMedication({
+      patientId,
+      name: parsed.data.name,
+      dosage: parsed.data.dosage,
+      frequency: parsed.data.frequency,
+      instructions: parsed.data.instructions,
+      startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : undefined,
+      endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
+    });
+
+    res.status(201).json({ medication });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to create medication");
+    res.status(500).json({ error: "Failed to create medication" });
+  }
+});
+
+// PUT /patient/medications/:id - Update medication
+router.put("/medications/:id", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { id } = req.params;
+    const parsed = medicationUpdateSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.issues });
+      return;
+    }
+
+    const medication = await updateMedication(id, patientId, {
+      name: parsed.data.name,
+      dosage: parsed.data.dosage ?? undefined,
+      frequency: parsed.data.frequency ?? undefined,
+      instructions: parsed.data.instructions ?? undefined,
+      startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : undefined,
+      endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
+      isActive: parsed.data.isActive,
+    });
+
+    if (!medication) {
+      res.status(404).json({ error: "Medication not found" });
+      return;
+    }
+
+    res.json({ medication });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to update medication");
+    res.status(500).json({ error: "Failed to update medication" });
+  }
+});
+
+// DELETE /patient/medications/:id - Soft delete medication
+router.delete("/medications/:id", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { id } = req.params;
+
+    const success = await deleteMedication(id, patientId);
+
+    if (!success) {
+      res.status(404).json({ error: "Medication not found" });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to delete medication");
+    res.status(500).json({ error: "Failed to delete medication" });
+  }
+});
+
+// POST /patient/medications/:id/log - Log adherence
+router.post("/medications/:id/log", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { id } = req.params;
+    const parsed = adherenceLogSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.issues });
+      return;
+    }
+
+    const log = await logAdherence({
+      medicationId: id,
+      patientId,
+      taken: parsed.data.taken,
+      notes: parsed.data.notes,
+      scheduledFor: parsed.data.scheduledFor ? new Date(parsed.data.scheduledFor) : undefined,
+    });
+
+    if (!log) {
+      res.status(404).json({ error: "Medication not found" });
+      return;
+    }
+
+    res.status(201).json({ log });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to log adherence");
+    res.status(500).json({ error: "Failed to log adherence" });
+  }
+});
+
+// GET /patient/medications/:id/logs - Get adherence history
+router.get("/medications/:id/logs", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { id } = req.params;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const logs = await getAdherenceLogs(id, patientId, { limit, offset });
+
+    if (logs === null) {
+      res.status(404).json({ error: "Medication not found" });
+      return;
+    }
+
+    res.json({ logs });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch adherence logs");
+    res.status(500).json({ error: "Failed to fetch adherence logs" });
   }
 });
 

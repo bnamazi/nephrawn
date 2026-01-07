@@ -78,6 +78,14 @@
 | GET | `/patient/dashboard` | Dashboard overview (all summaries) |
 | GET | `/patient/charts/:type` | Time-series data for charting |
 | GET | `/patient/summary/:type` | Measurement summary with trend |
+| GET | `/patient/medications` | List own medications |
+| POST | `/patient/medications` | Create medication |
+| GET | `/patient/medications/:id` | Get single medication |
+| PUT | `/patient/medications/:id` | Update medication |
+| DELETE | `/patient/medications/:id` | Soft delete medication |
+| POST | `/patient/medications/:id/log` | Log adherence (taken/skipped) |
+| GET | `/patient/medications/:id/logs` | Get adherence history |
+| GET | `/patient/medications/summary` | Adherence summary |
 
 ### Clinician Routes (`/clinician`) — requires clinician/admin role
 | Method | Endpoint | Description |
@@ -97,6 +105,8 @@
 | GET | `/clinician/patients/:patientId/profile/history` | Profile change audit trail |
 | GET | `/clinician/patients/:patientId/notes` | Patient's notes |
 | POST | `/clinician/patients/:patientId/notes` | Create note for patient |
+| GET | `/clinician/patients/:patientId/medications` | Patient's medications |
+| GET | `/clinician/patients/:patientId/medications/summary` | Patient's adherence summary |
 | GET | `/clinician/alerts` | All alerts for enrolled patients |
 | GET | `/clinician/alerts/:alertId` | Single alert details |
 | POST | `/clinician/alerts/:alertId/acknowledge` | Acknowledge alert |
@@ -127,6 +137,7 @@
 - Clinical profile self-entry (CKD stage self-reported, comorbidities, medications)
 - Symptom check-in form
 - Measurement entry (weight, BP)
+- Medication tracking (CRUD, adherence logging, summary)
 - View own history (read-only)
 - View enrolled clinics, self-discharge
 
@@ -135,8 +146,9 @@
 - Clinic switcher (multi-clinic support)
 - Clinic settings (Owner/Admin only): member management, role changes
 - Patient list (enrolled patients)
-- Patient detail with tabs: Overview, Measurements, Symptoms, Notes
+- Patient detail with tabs: Overview, Measurements, Symptoms, Medications, Notes
 - Patient clinical profile (CKD stage, comorbidities, medications)
+- Patient medication list with adherence summary
 - Care plan management (dry weight, BP targets, risk flags)
 - Profile completeness banners (showTargetsBanner, showProfileBanner)
 - Symptom check-in history with severity badges

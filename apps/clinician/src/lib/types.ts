@@ -378,6 +378,64 @@ export interface PatientSummary {
 }
 
 // ============================================
+// Medication Types
+// ============================================
+
+export interface MedicationLog {
+  id: string;
+  medicationId: string;
+  loggedAt: string;
+  scheduledFor: string | null;
+  taken: boolean;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface Medication {
+  id: string;
+  patientId: string;
+  name: string;
+  dosage: string | null;
+  frequency: string | null;
+  instructions: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  logs?: MedicationLog[];
+}
+
+export interface MedicationsResponse {
+  medications: Medication[];
+}
+
+export interface MedicationAdherenceSummary {
+  id: string;
+  name: string;
+  dosage: string | null;
+  frequency: string | null;
+  logsCount: number;
+  takenCount: number;
+  skippedCount: number;
+  lastLog: MedicationLog | null;
+}
+
+export interface AdherenceSummary {
+  totalMedications: number;
+  totalLogs: number;
+  takenCount: number;
+  skippedCount: number;
+  adherenceRate: number;
+  days: number;
+  medications: MedicationAdherenceSummary[];
+}
+
+export interface AdherenceSummaryResponse {
+  summary: AdherenceSummary;
+}
+
+// ============================================
 // Display Labels
 // ============================================
 

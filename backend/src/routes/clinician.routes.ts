@@ -44,6 +44,10 @@ import {
   CarePlanInput,
 } from "../services/careplan.service.js";
 import { getPatientSummary } from "../services/patientsummary.service.js";
+import {
+  getMedicationsForClinician,
+  getAdherenceSummaryForClinician,
+} from "../services/medication.service.js";
 
 const router = Router();
 
@@ -543,6 +547,58 @@ router.get("/patients/:patientId/summary", async (req: Request, res: Response) =
   } catch (error) {
     logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch patient summary");
     res.status(500).json({ error: "Failed to fetch patient summary" });
+  }
+});
+
+// ============================================
+// Patient Medications (Clinician View)
+// ============================================
+
+// GET /clinician/patients/:patientId/medications - View patient's medications
+router.get("/patients/:patientId/medications", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+    const includeInactive = req.query.includeInactive === "true";
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const medications = await getMedicationsForClinician(patientId, clinicianId, {
+      includeInactive,
+      limit,
+      offset,
+    });
+
+    if (medications === null) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    res.json({ medications });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch patient medications");
+    res.status(500).json({ error: "Failed to fetch patient medications" });
+  }
+});
+
+// GET /clinician/patients/:patientId/medications/summary - Get patient's adherence summary
+router.get("/patients/:patientId/medications/summary", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+    const days = parseInt(req.query.days as string) || 30;
+
+    const summary = await getAdherenceSummaryForClinician(patientId, clinicianId, days);
+
+    if (summary === null) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    res.json({ summary });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch adherence summary");
+    res.status(500).json({ error: "Failed to fetch adherence summary" });
   }
 });
 

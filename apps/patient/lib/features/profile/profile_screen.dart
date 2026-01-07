@@ -142,6 +142,18 @@ class _ProfileScreenContent extends StatelessWidget {
                     onTap: () => context.push('/clinics'),
                   ),
                 ),
+                const SizedBox(height: 8),
+
+                // Medications link
+                Card(
+                  child: ListTile(
+                    leading: Icon(Icons.medication_outlined, color: Theme.of(context).primaryColor),
+                    title: const Text('Medications'),
+                    subtitle: const Text('Track your medications and adherence'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/medications'),
+                  ),
+                ),
                 const SizedBox(height: 32),
 
                 // Logout button

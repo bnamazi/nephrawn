@@ -16,6 +16,7 @@ const TABS = [
   { label: 'Overview', href: '' },
   { label: 'Measurements', href: '/measurements' },
   { label: 'Symptoms', href: '/symptoms' },
+  { label: 'Medications', href: '/medications' },
   { label: 'Profile', href: '/profile' },
   { label: 'Care Plan', href: '/care-plan' },
   { label: 'Notes', href: '/notes' },

@@ -20,6 +20,19 @@ class ApiEndpoints {
   static const String clinicalProfile = '/patient/profile';
   static const String clinicalProfileHistory = '/patient/profile/history';
 
+  // Medication endpoints
+  static const String medications = '/patient/medications';
+  static const String medicationsSummary = '/patient/medications/summary';
+
+  /// Get a specific medication
+  static String medication(String id) => '/patient/medications/$id';
+
+  /// Log adherence for a medication
+  static String medicationLog(String id) => '/patient/medications/$id/log';
+
+  /// Get adherence logs for a medication
+  static String medicationLogs(String id) => '/patient/medications/$id/logs';
+
   /// Leave a clinic
   static String leaveClinic(String clinicId) => '/patient/clinics/$clinicId/leave';
 

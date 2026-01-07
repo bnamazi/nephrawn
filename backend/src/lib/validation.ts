@@ -128,8 +128,37 @@ export const bloodPressureSchema = z.object({
   timestamp: z.string().datetime().optional(),
 });
 
+// Medication validation
+export const medicationSchema = z.object({
+  name: z.string().min(1, "Name is required").max(200, "Name is too long"),
+  dosage: z.string().max(100, "Dosage is too long").optional(),
+  frequency: z.string().max(100, "Frequency is too long").optional(),
+  instructions: z.string().max(500, "Instructions are too long").optional(),
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+});
+
+export const medicationUpdateSchema = z.object({
+  name: z.string().min(1, "Name is required").max(200, "Name is too long").optional(),
+  dosage: z.string().max(100, "Dosage is too long").optional().nullable(),
+  frequency: z.string().max(100, "Frequency is too long").optional().nullable(),
+  instructions: z.string().max(500, "Instructions are too long").optional().nullable(),
+  startDate: z.string().datetime().optional().nullable(),
+  endDate: z.string().datetime().optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+export const adherenceLogSchema = z.object({
+  taken: z.boolean(),
+  notes: z.string().max(500, "Notes are too long").optional(),
+  scheduledFor: z.string().datetime().optional(),
+});
+
 export type PatientRegisterDto = z.infer<typeof patientRegisterSchema>;
 export type LoginDto = z.infer<typeof loginSchema>;
 export type SymptomCheckinDto = z.infer<typeof symptomCheckinSchema>;
 export type MeasurementDto = z.infer<typeof measurementSchema>;
 export type BloodPressureDto = z.infer<typeof bloodPressureSchema>;
+export type MedicationDto = z.infer<typeof medicationSchema>;
+export type MedicationUpdateDto = z.infer<typeof medicationUpdateSchema>;
+export type AdherenceLogDto = z.infer<typeof adherenceLogSchema>;

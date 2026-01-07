@@ -29,6 +29,7 @@ model Patient {
   claimedInvites        Invite[]              @relation("InvitesClaimed")
   profile               PatientProfile?
   profileAudits         PatientProfileAudit[]
+  medications           Medication[]
 
   @@map("patients")
 }
@@ -213,11 +214,14 @@ model InteractionLog {
 enum InteractionType {
   PATIENT_CHECKIN
   PATIENT_MEASUREMENT
+  PATIENT_MEDICATION
+  PATIENT_ADHERENCE_LOG
   CLINICIAN_VIEW
   CLINICIAN_ALERT_ACK
   CLINICIAN_NOTE
   CLINICIAN_CALL
   CLINICIAN_MESSAGE
+  CLINICIAN_MEDICATION_VIEW
 }
 
 // ============================================
@@ -325,6 +329,48 @@ model ClinicianNote {
   @@index([patientId, createdAt])
   @@index([alertId])
   @@map("clinician_notes")
+}
+
+// ============================================
+// Slice 6: Medication Tracking
+// ============================================
+
+model Medication {
+  id           String   @id @default(uuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id])
+
+  name         String
+  dosage       String?
+  frequency    String?
+  instructions String?
+  startDate    DateTime?
+  endDate      DateTime?
+  isActive     Boolean  @default(true)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  logs         MedicationLog[]
+
+  @@index([patientId, isActive])
+  @@map("medications")
+}
+
+model MedicationLog {
+  id           String     @id @default(uuid())
+  medicationId String
+  medication   Medication @relation(fields: [medicationId], references: [id])
+
+  loggedAt     DateTime   @default(now())
+  scheduledFor DateTime?
+  taken        Boolean
+  notes        String?
+
+  createdAt    DateTime   @default(now())
+
+  @@index([medicationId, loggedAt])
+  @@map("medication_logs")
 }
 
 // ============================================

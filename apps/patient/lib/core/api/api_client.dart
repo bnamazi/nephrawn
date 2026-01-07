@@ -62,6 +62,16 @@ class ApiClient {
       throw ApiException.fromDioException(e);
     }
   }
+
+  /// DELETE request
+  Future<Map<String, dynamic>> delete(String path) async {
+    try {
+      final response = await _dio.delete(path);
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
 }
 
 /// Interceptor to attach JWT token to requests
