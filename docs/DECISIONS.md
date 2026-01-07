@@ -117,3 +117,29 @@ Consequence:
 - Role badges in UI provide visibility into permissions
 - No clinician invite system needed; add by email is sufficient
 - Ownership transfer not supported (keeps model simple)
+
+---
+
+## 2026-01 — Patient profile and care plan architecture
+Context: Clinicians need to track patient clinical information (CKD stage, comorbidities, medications) and set individualized targets (dry weight, BP ranges).
+Decision: Separate PatientProfile (patient-owned clinical data) from CarePlan (enrollment-scoped clinician-managed targets):
+- **PatientProfile**: One per patient, contains demographics, CKD stage, comorbidities, medications
+- **CarePlan**: One per enrollment, contains dry weight, BP targets, risk flags, notes
+- Both support clinician-verified and patient-reported fields (e.g., ckdStageClinician vs ckdStageSelfReported)
+Consequence:
+- Profile follows patient across clinics; care plan is clinic-specific
+- Clinicians can verify patient-reported data without overwriting it
+- Completeness scoring guides clinicians to fill critical fields
+- Future: Care plan targets can drive alert thresholds
+
+## 2026-01 — Audit trail for profile and care plan changes
+Context: Clinical data changes must be traceable for compliance and accountability.
+Decision: Maintain PatientProfileAudit table that records all changes to PatientProfile and CarePlan:
+- Captures: entityType, entityId, actorType (PATIENT/CLINICIAN/SYSTEM), actorId, changedFields (JSONB with old/new values), reason, timestamp
+- Automatically populated by service layer on every update
+- Immutable append-only log
+Consequence:
+- Complete audit trail for regulatory compliance
+- Clinicians can view change history in UI
+- Supports "who changed what when" queries
+- Change reasons optional but encouraged for clinical context

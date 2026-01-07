@@ -25,6 +25,9 @@ Nephrawn augments—not replaces—clinical judgment.
 - Manual clinician review
 - Basic rule-based alerts (no automation)
 - Interaction logging for RPM/CCM compliance
+- Patient clinical profile (CKD stage, comorbidities, medications)
+- Care plan management (dry weight, BP targets, risk flags)
+- Profile/care plan audit trail with change history
 
 ---
 

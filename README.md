@@ -19,6 +19,10 @@ Nephrawn enables structured collection of patient-reported symptoms, device-deri
 - **Multi-clinic support** - Clinicians can work across multiple clinics
 - **Role-based access** - Owner, Admin, Clinician, Staff roles
 - **RPM/CCM interaction logging** - Audit trail for billing compliance
+- **Patient clinical profile** - CKD stage, comorbidities, medications tracking
+- **Care plan management** - Dry weight targets, BP ranges, risk flags per patient
+- **Profile completeness banners** - Guides clinicians to verify critical data
+- **Audit history** - Full change log for profile and care plan modifications
 
 ### Planned (MVP+)
 - Device integration (Withings)
