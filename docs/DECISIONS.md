@@ -143,3 +143,49 @@ Consequence:
 - Clinicians can view change history in UI
 - Supports "who changed what when" queries
 - Change reasons optional but encouraged for clinical context
+
+---
+
+## 2026-01 — Intentional deferral of security hardening
+
+Context: The prototype is being expanded to include Option B features (device integration, lab uploads, email notifications, medication tracking) before production deployment. Security hardening could be done incrementally or holistically.
+
+Decision: **Defer security hardening until prototype is feature-complete.**
+
+Rationale:
+1. **End-to-end evaluation**: Clinical workflows cannot be fully evaluated until all data capture features exist. Hardening partial features risks rework.
+2. **Feature interactions**: Device data, lab uploads, and notifications interact with existing alert/measurement systems. Understanding these interactions informs security boundaries.
+3. **Holistic hardening**: Addressing auth, rate limiting, logging, and validation together ensures consistent security posture across all features.
+4. **Time-bounded**: This deferral is intentional and time-bounded to prototype completion (4 vertical slices).
+
+Known issues tracked for hardening phase:
+- JWT secret fallback (use ENV or fail)
+- Rate limiting on auth endpoints
+- Token persistence in web/mobile apps
+- Input validation bounds on measurements
+- Structured logging with correlation IDs
+- CORS configuration for deployment
+
+Consequence:
+- Prototype is NOT suitable for real patient data
+- All prototype testing uses synthetic/demo data only
+- Hardening is Phase 2, immediately after prototype completion
+- Security issues are tracked, not ignored
+
+## 2026-01 — Prototype feature scope (Option B)
+
+Context: After MVP feature completion, two paths were considered:
+1. Harden MVP and deploy
+2. Expand prototype scope to include enhanced data capture, then harden holistically
+
+Decision: Expand prototype to include Option B features before hardening:
+- Device integration (Withings)
+- Lab result uploads (documents)
+- Email notifications for alerts
+- Medication tracking
+
+Consequence:
+- Four additional vertical slices before hardening
+- Each slice: implemented, tested, documented, committed
+- No partial slices; no mixing slices
+- Hardening happens once, after all features complete

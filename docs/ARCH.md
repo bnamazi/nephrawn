@@ -146,15 +146,110 @@
 
 ---
 
-## API Layer (MVP+ Extension Points)
+## Prototype Extension Points (Option B Features)
+
+These features are in active development as part of prototype scope.
+
+### 1. Device Integration (Withings)
+
+**Schema additions:**
+- `DeviceConnection` — OAuth tokens and sync state per patient/vendor
+- `Measurement.source` — Already exists; will use `'withings'` value
+
+**Services:**
+- `DeviceService` — OAuth flow, token refresh, connection management
+- `WithingsAdapter` — Vendor-specific API client implementing adapter interface
+
+**APIs:**
+- `POST /patient/devices/withings/authorize` — Initiate OAuth
+- `GET /patient/devices/withings/callback` — OAuth callback
+- `DELETE /patient/devices/withings` — Disconnect device
+- `GET /patient/devices` — List connected devices
+
+**Background jobs:**
+- `syncWithingsData` — Periodic sync of measurements from Withings API
+
+### 2. Lab Result Uploads
+
+**Schema additions:**
+- `Document` — Metadata for uploaded files (patientId, type, uploadedAt, storageKey)
+- `DocumentType` enum — LAB_RESULT, OTHER
+
+**Services:**
+- `DocumentService` — Upload URL generation, metadata management
+- Storage adapter — S3-compatible blob storage (local filesystem for dev)
+
+**APIs:**
+- `POST /patient/documents/upload-url` — Get signed upload URL
+- `POST /patient/documents` — Confirm upload, create metadata
+- `GET /patient/documents` — List own documents
+- `GET /clinician/patients/:patientId/documents` — List patient documents
+- `GET /documents/:documentId/download-url` — Get signed download URL
+
+### 3. Email Notifications
+
+**Schema additions:**
+- `NotificationPreference` — Per-clinician email settings
+- `NotificationLog` — Sent notification history (for rate limiting)
+
+**Services:**
+- `NotificationService` — Alert-to-notification mapping, preference checking
+- `EmailAdapter` — Email sending (Resend, SendGrid, or SMTP)
+
+**APIs:**
+- `GET /clinician/notifications/preferences` — Get notification settings
+- `PUT /clinician/notifications/preferences` — Update notification settings
+
+**Triggers:**
+- Alert creation → NotificationService.notifyIfConfigured()
+
+### 4. Medication Tracking
+
+**Schema additions:**
+- `Medication` — Patient medications (name, dosage, frequency, startDate, endDate)
+- `MedicationLog` — Adherence confirmations (medicationId, takenAt, skipped, notes)
+
+**Services:**
+- `MedicationService` — CRUD operations, adherence tracking
+
+**APIs:**
+- `GET /patient/medications` — List own medications
+- `POST /patient/medications` — Add medication
+- `PUT /patient/medications/:id` — Update medication
+- `DELETE /patient/medications/:id` — Remove medication
+- `POST /patient/medications/:id/log` — Log adherence
+- `GET /patient/medications/:id/adherence` — Adherence history
+- `GET /clinician/patients/:patientId/medications` — View patient medications
+
+---
+
+## Deferred to Hardening Phase
+
+The following items are intentionally deferred until prototype is feature-complete:
+
+| Item | Current State | Hardening Action |
+|------|---------------|------------------|
+| JWT secret | Fallback to hardcoded value | Fail if ENV not set |
+| Rate limiting | Not implemented | Add to auth endpoints |
+| Token persistence | In-memory (web) | localStorage with refresh |
+| Input validation | Basic | Bounds checking on all measurements |
+| Logging | console.log scattered | Structured logging with correlation IDs |
+| CORS | Hardcoded localhost | Environment-based configuration |
+| Error handling | Generic 500s | Categorized error responses |
+
+See DECISIONS.md for rationale on deferral.
+
+---
+
+## Future Extension Points (Post-Prototype)
 
 | Capability | Integration Pattern | Notes |
 |------------|---------------------|-------|
-| Lab Results | Upload → Blob storage → Document entity | Structured parsing deferred |
-| Device Sync | OAuth adapter → Measurement entity | Withings first; adapter interface defined |
-| Medication | New entity; optional push notifications | Reminder service deferred |
+| Lab OCR/Parsing | Background job → structured data | Manual correction UI |
 | LLM Summaries | Async job → cache result on entity | No real-time generation in UI path |
 | Prioritization | Background scoring → sort order field | Must be explainable |
+| Push Notifications | FCM/APNs adapter | Medication reminders |
+| Additional Devices | Adapter pattern | Fitbit, Apple Health |
 
 ---
 
