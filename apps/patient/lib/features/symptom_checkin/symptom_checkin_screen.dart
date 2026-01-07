@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/widgets/app_bottom_nav.dart';
 import '../../routes/router.dart';
 import 'symptom_checkin_provider.dart';
 import 'widgets/checkin_list_item.dart';
@@ -90,47 +91,7 @@ class _SymptomCheckinScreenContent extends StatelessWidget {
           ),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 3,
-        onDestinationSelected: (index) {
-          switch (index) {
-            case 0:
-              context.go(Routes.home);
-              break;
-            case 1:
-              context.go(Routes.weight);
-              break;
-            case 2:
-              context.go(Routes.bp);
-              break;
-            case 3:
-              // Already on symptoms
-              break;
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.monitor_weight_outlined),
-            selectedIcon: Icon(Icons.monitor_weight),
-            label: 'Weight',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.favorite_outline),
-            selectedIcon: Icon(Icons.favorite),
-            label: 'BP',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.medical_information_outlined),
-            selectedIcon: Icon(Icons.medical_information),
-            label: 'Symptoms',
-          ),
-        ],
-      ),
+      bottomNavigationBar: const AppBottomNav(currentIndex: NavIndex.symptoms),
       body: Consumer<SymptomCheckinProvider>(
         builder: (context, provider, child) {
           // Loading state

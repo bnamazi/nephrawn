@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/widgets/app_bottom_nav.dart';
 import '../../routes/router.dart';
 import 'weight_chart.dart';
 import 'weight_history_provider.dart';
@@ -190,47 +191,7 @@ class _WeightHistoryScreenContent extends StatelessWidget {
         icon: const Icon(Icons.add),
         label: const Text('Add Weight'),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 1,
-        onDestinationSelected: (index) {
-          switch (index) {
-            case 0:
-              context.go(Routes.home);
-              break;
-            case 1:
-              // Already on weight
-              break;
-            case 2:
-              context.go(Routes.bp);
-              break;
-            case 3:
-              context.go(Routes.checkins);
-              break;
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.monitor_weight_outlined),
-            selectedIcon: Icon(Icons.monitor_weight),
-            label: 'Weight',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.favorite_outline),
-            selectedIcon: Icon(Icons.favorite),
-            label: 'BP',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.medical_information_outlined),
-            selectedIcon: Icon(Icons.medical_information),
-            label: 'Symptoms',
-          ),
-        ],
-      ),
+      bottomNavigationBar: const AppBottomNav(currentIndex: NavIndex.weight),
     );
   }
 }

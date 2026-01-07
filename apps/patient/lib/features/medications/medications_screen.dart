@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/api/api_client.dart';
+import '../../core/auth/auth_provider.dart';
 import '../../core/models/medication.dart';
+import '../../core/widgets/app_bottom_nav.dart';
+import '../../routes/router.dart';
 import 'medications_provider.dart';
 
 /// Screen showing patient's medication list
@@ -25,14 +28,71 @@ class _MedicationsScreenContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.read<AuthProvider>();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Medications'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) async {
+              if (value == 'profile') {
+                context.push(Routes.profile);
+              } else if (value == 'logout') {
+                await authProvider.logout();
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'profile',
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor:
+                          Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                      child: Icon(
+                        Icons.person,
+                        size: 18,
+                        color: Theme.of(context).primaryColor,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            authProvider.user?.name ?? 'Patient',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            authProvider.user?.email ?? '',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, size: 20),
+                    SizedBox(width: 8),
+                    Text('Log Out'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
+      bottomNavigationBar: const AppBottomNav(currentIndex: NavIndex.medications),
       body: Consumer<MedicationsProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading) {
