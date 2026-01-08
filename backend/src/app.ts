@@ -17,6 +17,7 @@ import clinicianRoutes from "./routes/clinician.routes.js";
 import patientRoutes from "./routes/patient.routes.js";
 import inviteRoutes from "./routes/invite.routes.js";
 import clinicRoutes from "./routes/clinic.routes.js";
+import filesRoutes from "./routes/files.routes.js";
 
 export function createApp(options: { skipRateLimiting?: boolean; skipHttpLogging?: boolean } = {}) {
   const app = express();
@@ -100,6 +101,9 @@ export function createApp(options: { skipRateLimiting?: boolean; skipHttpLogging
 
   // Clinic management routes (includes /admin/* and /clinician/clinic/* endpoints)
   app.use(clinicRoutes);
+
+  // File serving routes for local dev (document uploads/downloads)
+  app.use("/files", filesRoutes);
 
   // 404 handler
   app.use(notFoundHandler);

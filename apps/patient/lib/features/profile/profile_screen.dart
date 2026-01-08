@@ -154,6 +154,18 @@ class _ProfileScreenContent extends StatelessWidget {
                     onTap: () => context.push('/medications'),
                   ),
                 ),
+                const SizedBox(height: 8),
+
+                // Lab Results & Documents link
+                Card(
+                  child: ListTile(
+                    leading: Icon(Icons.folder_outlined, color: Theme.of(context).primaryColor),
+                    title: const Text('Lab Results & Documents'),
+                    subtitle: const Text('Upload and manage your documents'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/documents'),
+                  ),
+                ),
                 const SizedBox(height: 32),
 
                 // Logout button

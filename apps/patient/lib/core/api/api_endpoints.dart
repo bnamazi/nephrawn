@@ -33,6 +33,16 @@ class ApiEndpoints {
   /// Get adherence logs for a medication
   static String medicationLogs(String id) => '/patient/medications/$id/logs';
 
+  // Document endpoints
+  static const String documents = '/patient/documents';
+  static const String documentsUploadUrl = '/patient/documents/upload-url';
+
+  /// Get a specific document
+  static String document(String id) => '/patient/documents/$id';
+
+  /// Get download URL for a document
+  static String documentDownloadUrl(String id) => '/patient/documents/$id/download-url';
+
   /// Leave a clinic
   static String leaveClinic(String clinicId) => '/patient/clinics/$clinicId/leave';
 

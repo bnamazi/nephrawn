@@ -1,4 +1,6 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
+import 'package:http/http.dart' as http;
 import 'api_endpoints.dart';
 import 'api_exceptions.dart';
 import '../auth/secure_storage.dart';
@@ -70,6 +72,31 @@ class ApiClient {
       return response.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
+    }
+  }
+
+  /// Upload file directly to a signed URL
+  /// This bypasses the API server and uploads directly to storage
+  Future<void> uploadToSignedUrl(
+    String url,
+    Uint8List bytes,
+    String contentType,
+  ) async {
+    try {
+      final response = await http.put(
+        Uri.parse(url),
+        body: bytes,
+        headers: {'Content-Type': contentType},
+      );
+      if (response.statusCode != 200) {
+        throw ApiException(
+          message: 'Upload failed with status ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException(message: 'Upload failed: ${e.toString()}');
     }
   }
 }

@@ -48,6 +48,11 @@ import {
   getMedicationsForClinician,
   getAdherenceSummaryForClinician,
 } from "../services/medication.service.js";
+import {
+  getDocumentsForClinician,
+  getDocumentForClinician,
+  generateDownloadUrlForClinician,
+} from "../services/document.service.js";
 
 const router = Router();
 
@@ -599,6 +604,73 @@ router.get("/patients/:patientId/medications/summary", async (req: Request, res:
   } catch (error) {
     logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch adherence summary");
     res.status(500).json({ error: "Failed to fetch adherence summary" });
+  }
+});
+
+// ============================================
+// Patient Documents (Clinician View)
+// ============================================
+
+// GET /clinician/patients/:patientId/documents - List patient's documents
+router.get("/patients/:patientId/documents", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+    const type = req.query.type as "LAB_RESULT" | "OTHER" | undefined;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const documents = await getDocumentsForClinician(patientId, clinicianId, { type, limit, offset });
+
+    if (documents === null) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    res.json({ documents });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch patient documents");
+    res.status(500).json({ error: "Failed to fetch patient documents" });
+  }
+});
+
+// GET /clinician/patients/:patientId/documents/:id - Get single document
+router.get("/patients/:patientId/documents/:id", async (req: Request, res: Response) => {
+  try {
+    const { patientId, id } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const document = await getDocumentForClinician(id, patientId, clinicianId);
+
+    if (!document) {
+      res.status(404).json({ error: "Document not found" });
+      return;
+    }
+
+    res.json({ document });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch document");
+    res.status(500).json({ error: "Failed to fetch document" });
+  }
+});
+
+// GET /clinician/patients/:patientId/documents/:id/download-url - Get download URL
+router.get("/patients/:patientId/documents/:id/download-url", async (req: Request, res: Response) => {
+  try {
+    const { patientId, id } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const result = await generateDownloadUrlForClinician(id, patientId, clinicianId);
+
+    if (!result) {
+      res.status(404).json({ error: "Document not found" });
+      return;
+    }
+
+    res.json(result);
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to generate download URL");
+    res.status(500).json({ error: "Failed to generate download URL" });
   }
 });
 

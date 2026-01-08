@@ -3,7 +3,7 @@ import { MeasurementType } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { logger } from "../lib/logger.js";
 import { authenticate, requireRole } from "../middleware/auth.middleware.js";
-import { symptomCheckinSchema, measurementSchema, bloodPressureSchema, medicationSchema, medicationUpdateSchema, adherenceLogSchema } from "../lib/validation.js";
+import { symptomCheckinSchema, measurementSchema, bloodPressureSchema, medicationSchema, medicationUpdateSchema, adherenceLogSchema, uploadRequestSchema, documentMetadataSchema } from "../lib/validation.js";
 import { createCheckin, getCheckinsByPatient } from "../services/checkin.service.js";
 import { createMeasurement, getMeasurementsByPatient } from "../services/measurement.service.js";
 import { getAlertsByPatient } from "../services/alert.service.js";
@@ -33,6 +33,14 @@ import {
   getAdherenceLogs,
   getAdherenceSummary,
 } from "../services/medication.service.js";
+import {
+  createDocumentWithUploadUrl,
+  listDocuments,
+  getDocument,
+  updateDocument,
+  generateDownloadUrl,
+  deleteDocument,
+} from "../services/document.service.js";
 
 const router = Router();
 
@@ -359,6 +367,151 @@ router.get("/medications/:id/logs", async (req: Request, res: Response) => {
   } catch (error) {
     logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch adherence logs");
     res.status(500).json({ error: "Failed to fetch adherence logs" });
+  }
+});
+
+// ============================================
+// Documents
+// ============================================
+
+// POST /patient/documents/upload-url - Get signed upload URL
+router.post("/documents/upload-url", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+
+    logger.debug({ body: req.body }, "Document upload request received");
+
+    const parsed = uploadRequestSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      logger.warn({ body: req.body, issues: parsed.error.issues }, "Document upload validation failed");
+      res.status(400).json({ error: "Validation failed", details: parsed.error.issues });
+      return;
+    }
+
+    const result = await createDocumentWithUploadUrl({
+      patientId,
+      filename: parsed.data.filename,
+      mimeType: parsed.data.mimeType,
+      sizeBytes: parsed.data.sizeBytes,
+      type: parsed.data.type as "LAB_RESULT" | "OTHER" | undefined,
+      title: parsed.data.title,
+      notes: parsed.data.notes,
+      documentDate: parsed.data.documentDate ? new Date(parsed.data.documentDate) : undefined,
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to create upload URL");
+    res.status(500).json({ error: "Failed to create upload URL" });
+  }
+});
+
+// GET /patient/documents - List own documents
+router.get("/documents", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const type = req.query.type as "LAB_RESULT" | "OTHER" | undefined;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const documents = await listDocuments(patientId, { type, limit, offset });
+
+    res.json({ documents });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch documents");
+    res.status(500).json({ error: "Failed to fetch documents" });
+  }
+});
+
+// GET /patient/documents/:id - Get single document
+router.get("/documents/:id", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { id } = req.params;
+
+    const document = await getDocument(id, patientId);
+
+    if (!document) {
+      res.status(404).json({ error: "Document not found" });
+      return;
+    }
+
+    res.json({ document });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch document");
+    res.status(500).json({ error: "Failed to fetch document" });
+  }
+});
+
+// PUT /patient/documents/:id - Update document metadata
+router.put("/documents/:id", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { id } = req.params;
+    const parsed = documentMetadataSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.issues });
+      return;
+    }
+
+    const document = await updateDocument(id, patientId, {
+      title: parsed.data.title ?? undefined,
+      notes: parsed.data.notes ?? undefined,
+      documentDate: parsed.data.documentDate ? new Date(parsed.data.documentDate) : null,
+      type: parsed.data.type as "LAB_RESULT" | "OTHER" | undefined,
+    });
+
+    if (!document) {
+      res.status(404).json({ error: "Document not found" });
+      return;
+    }
+
+    res.json({ document });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to update document");
+    res.status(500).json({ error: "Failed to update document" });
+  }
+});
+
+// GET /patient/documents/:id/download-url - Get signed download URL
+router.get("/documents/:id/download-url", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { id } = req.params;
+
+    const result = await generateDownloadUrl(id, patientId);
+
+    if (!result) {
+      res.status(404).json({ error: "Document not found" });
+      return;
+    }
+
+    res.json(result);
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to generate download URL");
+    res.status(500).json({ error: "Failed to generate download URL" });
+  }
+});
+
+// DELETE /patient/documents/:id - Delete document
+router.delete("/documents/:id", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { id } = req.params;
+
+    const result = await deleteDocument(id, patientId);
+
+    if (!result) {
+      res.status(404).json({ error: "Document not found" });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to delete document");
+    res.status(500).json({ error: "Failed to delete document" });
   }
 });
 

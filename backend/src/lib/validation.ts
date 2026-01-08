@@ -162,3 +162,39 @@ export type BloodPressureDto = z.infer<typeof bloodPressureSchema>;
 export type MedicationDto = z.infer<typeof medicationSchema>;
 export type MedicationUpdateDto = z.infer<typeof medicationUpdateSchema>;
 export type AdherenceLogDto = z.infer<typeof adherenceLogSchema>;
+
+// Document validation
+export const documentTypeSchema = z.enum(["LAB_RESULT", "OTHER"]);
+
+const allowedMimeTypes = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/heic",
+] as const;
+
+export const uploadRequestSchema = z.object({
+  filename: z.string().min(1, "Filename is required").max(255, "Filename is too long"),
+  mimeType: z.enum(allowedMimeTypes, {
+    error: "Invalid file type. Allowed: PDF, JPEG, PNG, HEIC",
+  }),
+  sizeBytes: z
+    .number()
+    .int("Size must be an integer")
+    .min(1, "File cannot be empty")
+    .max(10 * 1024 * 1024, "File size cannot exceed 10MB"),
+  type: documentTypeSchema.optional(),
+  title: z.string().max(200, "Title is too long").optional(),
+  notes: z.string().max(1000, "Notes are too long").optional(),
+  documentDate: z.string().datetime().optional(),
+});
+
+export const documentMetadataSchema = z.object({
+  title: z.string().max(200, "Title is too long").optional().nullable(),
+  notes: z.string().max(1000, "Notes are too long").optional().nullable(),
+  documentDate: z.string().datetime().optional().nullable(),
+  type: documentTypeSchema.optional(),
+});
+
+export type UploadRequestDto = z.infer<typeof uploadRequestSchema>;
+export type DocumentMetadataDto = z.infer<typeof documentMetadataSchema>;

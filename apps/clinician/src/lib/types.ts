@@ -492,3 +492,38 @@ export const SEX_LABELS: Record<Sex, string> = {
   OTHER: 'Other',
   UNSPECIFIED: 'Not specified',
 };
+
+// ============================================
+// Document Types
+// ============================================
+
+export type DocumentType = 'LAB_RESULT' | 'OTHER';
+
+export interface PatientDocument {
+  id: string;
+  patientId: string;
+  type: DocumentType;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  title: string | null;
+  notes: string | null;
+  documentDate: string | null;
+  uploadedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentsResponse {
+  documents: PatientDocument[];
+}
+
+export interface DocumentDownloadResponse {
+  document: PatientDocument;
+  downloadUrl: string;
+}
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  LAB_RESULT: 'Lab Result',
+  OTHER: 'Other',
+};

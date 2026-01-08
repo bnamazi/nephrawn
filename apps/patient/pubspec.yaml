@@ -46,6 +46,15 @@ dependencies:
   # Date formatting
   intl: ^0.20.2
 
+  # File picking
+  file_picker: ^8.0.0
+
+  # HTTP for direct file uploads
+  http: ^1.2.0
+
+  # URL launcher for opening files
+  url_launcher: ^6.2.0
+
   # Icons
   cupertino_icons: ^1.0.8
 

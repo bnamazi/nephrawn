@@ -30,6 +30,7 @@ model Patient {
   profile               PatientProfile?
   profileAudits         PatientProfileAudit[]
   medications           Medication[]
+  documents             Document[]
 
   @@map("patients")
 }
@@ -216,12 +217,14 @@ enum InteractionType {
   PATIENT_MEASUREMENT
   PATIENT_MEDICATION
   PATIENT_ADHERENCE_LOG
+  PATIENT_DOCUMENT
   CLINICIAN_VIEW
   CLINICIAN_ALERT_ACK
   CLINICIAN_NOTE
   CLINICIAN_CALL
   CLINICIAN_MESSAGE
   CLINICIAN_MEDICATION_VIEW
+  CLINICIAN_DOCUMENT_VIEW
 }
 
 // ============================================
@@ -371,6 +374,39 @@ model MedicationLog {
 
   @@index([medicationId, loggedAt])
   @@map("medication_logs")
+}
+
+// ============================================
+// Slice 7: Lab Result Uploads
+// ============================================
+
+enum DocumentType {
+  LAB_RESULT
+  OTHER
+}
+
+model Document {
+  id           String       @id @default(uuid())
+  patientId    String
+  patient      Patient      @relation(fields: [patientId], references: [id])
+
+  type         DocumentType @default(LAB_RESULT)
+  filename     String                        // original filename
+  mimeType     String                        // e.g., "application/pdf", "image/jpeg"
+  sizeBytes    Int
+  storageKey   String       @unique          // path in storage
+
+  title        String?                       // patient-provided title
+  notes        String?                       // patient-provided notes
+  documentDate DateTime?                     // date on the lab report
+
+  uploadedAt   DateTime     @default(now())
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([patientId, uploadedAt])
+  @@index([patientId, type])
+  @@map("documents")
 }
 
 // ============================================

@@ -21,6 +21,7 @@ import '../features/clinical_profile/clinical_profile_edit_screen.dart';
 import '../features/medications/medications_screen.dart';
 import '../features/medications/medication_entry_screen.dart';
 import '../features/medications/medication_detail_screen.dart';
+import '../features/documents/documents_screen.dart';
 
 /// Route paths
 class Routes {
@@ -48,6 +49,8 @@ class Routes {
   static const String medications = '/medications';
   static const String addMedication = '/add-medication';
   static const String medicationDetail = '/medication';
+  // Documents
+  static const String documents = '/documents';
 }
 
 /// Create app router with auth guards
@@ -167,6 +170,10 @@ GoRouter createRouter(AuthProvider authProvider) {
           final id = state.pathParameters['id']!;
           return MedicationDetailScreen(medicationId: id);
         },
+      ),
+      GoRoute(
+        path: Routes.documents,
+        builder: (context, state) => const DocumentsScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(
