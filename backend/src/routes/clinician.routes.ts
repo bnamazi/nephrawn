@@ -53,6 +53,20 @@ import {
   getDocumentForClinician,
   generateDownloadUrlForClinician,
 } from "../services/document.service.js";
+import {
+  getLabReportsForClinician,
+  getLabReportForClinician,
+  createLabReportForPatient,
+  verifyLabReport,
+  addLabResultForPatient,
+  updateLabResultForPatient,
+  deleteLabResultForPatient,
+} from "../services/lab.service.js";
+import {
+  labReportSchema,
+  labResultSchema,
+  labResultUpdateSchema,
+} from "../lib/validation.js";
 
 const router = Router();
 
@@ -671,6 +685,202 @@ router.get("/patients/:patientId/documents/:id/download-url", async (req: Reques
   } catch (error) {
     logger.error({ err: error, patientId: req.params.patientId }, "Failed to generate download URL");
     res.status(500).json({ error: "Failed to generate download URL" });
+  }
+});
+
+// ============================================
+// Patient Labs (Clinician View & Actions)
+// ============================================
+
+// GET /clinician/patients/:patientId/labs - List patient's lab reports
+router.get("/patients/:patientId/labs", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const labReports = await getLabReportsForClinician(patientId, clinicianId, { limit, offset });
+
+    if (labReports === null) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    res.json({ labReports });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch patient lab reports");
+    res.status(500).json({ error: "Failed to fetch patient lab reports" });
+  }
+});
+
+// GET /clinician/patients/:patientId/labs/:id - Get single lab report
+router.get("/patients/:patientId/labs/:id", async (req: Request, res: Response) => {
+  try {
+    const { patientId, id } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const labReport = await getLabReportForClinician(id, patientId, clinicianId);
+
+    if (!labReport) {
+      res.status(404).json({ error: "Lab report not found" });
+      return;
+    }
+
+    res.json({ labReport });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch lab report");
+    res.status(500).json({ error: "Failed to fetch lab report" });
+  }
+});
+
+// POST /clinician/patients/:patientId/labs - Create lab report for patient
+router.post("/patients/:patientId/labs", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+    const parsed = labReportSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.issues });
+      return;
+    }
+
+    const labReport = await createLabReportForPatient(patientId, clinicianId, {
+      collectedAt: new Date(parsed.data.collectedAt),
+      reportedAt: parsed.data.reportedAt ? new Date(parsed.data.reportedAt) : undefined,
+      labName: parsed.data.labName,
+      orderingProvider: parsed.data.orderingProvider,
+      notes: parsed.data.notes,
+      documentId: parsed.data.documentId,
+      results: parsed.data.results?.map((r) => ({
+        analyteName: r.analyteName,
+        analyteCode: r.analyteCode,
+        value: r.value,
+        unit: r.unit,
+        referenceRangeLow: r.referenceRangeLow,
+        referenceRangeHigh: r.referenceRangeHigh,
+        flag: r.flag as "H" | "L" | "C" | undefined,
+      })),
+    });
+
+    if (!labReport) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    res.status(201).json({ labReport });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to create lab report");
+    res.status(500).json({ error: "Failed to create lab report" });
+  }
+});
+
+// POST /clinician/patients/:patientId/labs/:id/verify - Verify lab report
+router.post("/patients/:patientId/labs/:id/verify", async (req: Request, res: Response) => {
+  try {
+    const { patientId, id } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const labReport = await verifyLabReport(id, patientId, clinicianId);
+
+    if (!labReport) {
+      res.status(404).json({ error: "Lab report not found or not enrolled" });
+      return;
+    }
+
+    res.json({ labReport });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to verify lab report");
+    res.status(500).json({ error: "Failed to verify lab report" });
+  }
+});
+
+// POST /clinician/patients/:patientId/labs/:id/results - Add result to lab report
+router.post("/patients/:patientId/labs/:id/results", async (req: Request, res: Response) => {
+  try {
+    const { patientId, id } = req.params;
+    const clinicianId = req.user!.sub;
+    const parsed = labResultSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.issues });
+      return;
+    }
+
+    const result = await addLabResultForPatient(id, patientId, clinicianId, {
+      analyteName: parsed.data.analyteName,
+      analyteCode: parsed.data.analyteCode,
+      value: parsed.data.value,
+      unit: parsed.data.unit,
+      referenceRangeLow: parsed.data.referenceRangeLow,
+      referenceRangeHigh: parsed.data.referenceRangeHigh,
+      flag: parsed.data.flag as "H" | "L" | "C" | undefined,
+    });
+
+    if (!result) {
+      res.status(404).json({ error: "Lab report not found or not enrolled" });
+      return;
+    }
+
+    res.status(201).json({ result });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to add lab result");
+    res.status(500).json({ error: "Failed to add lab result" });
+  }
+});
+
+// PUT /clinician/patients/:patientId/labs/:id/results/:resultId - Update result
+router.put("/patients/:patientId/labs/:id/results/:resultId", async (req: Request, res: Response) => {
+  try {
+    const { patientId, resultId } = req.params;
+    const clinicianId = req.user!.sub;
+    const parsed = labResultUpdateSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.issues });
+      return;
+    }
+
+    const result = await updateLabResultForPatient(resultId, patientId, clinicianId, {
+      analyteName: parsed.data.analyteName,
+      analyteCode: parsed.data.analyteCode,
+      value: parsed.data.value,
+      unit: parsed.data.unit,
+      referenceRangeLow: parsed.data.referenceRangeLow,
+      referenceRangeHigh: parsed.data.referenceRangeHigh,
+      flag: parsed.data.flag as "H" | "L" | "C" | null | undefined,
+    });
+
+    if (!result) {
+      res.status(404).json({ error: "Lab result not found or not enrolled" });
+      return;
+    }
+
+    res.json({ result });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to update lab result");
+    res.status(500).json({ error: "Failed to update lab result" });
+  }
+});
+
+// DELETE /clinician/patients/:patientId/labs/:id/results/:resultId - Delete result
+router.delete("/patients/:patientId/labs/:id/results/:resultId", async (req: Request, res: Response) => {
+  try {
+    const { patientId, resultId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const success = await deleteLabResultForPatient(resultId, patientId, clinicianId);
+
+    if (!success) {
+      res.status(404).json({ error: "Lab result not found or not enrolled" });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to delete lab result");
+    res.status(500).json({ error: "Failed to delete lab result" });
   }
 });
 

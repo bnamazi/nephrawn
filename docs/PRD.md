@@ -96,8 +96,19 @@ The following features are in-scope for the prototype phase:
 - Medication history tracked over time
 - **Non-goal**: Automated reminders/push notifications (deferred)
 
+### 5. Structured Lab Results (Slice 2.5)
+- Separate Labs tab with structured lab results (individual analyte rows)
+- Manual entry with extension points for future automation
+- Patient-entered labs with clinician verification workflow
+- Common CKD analytes for quick-pick (Creatinine, eGFR, BUN, Potassium, etc.)
+- Reference ranges and abnormal flags (High/Low/Critical)
+- LOINC code support for future standardization
+- Optional link to source document (PDF)
+- **Non-goal**: OCR/parsing of lab documents (deferred to production)
+- **Non-goal**: Lab provider API integration (deferred)
+
 ### Prototype Completion Criteria
-- All four features implemented, tested, and documented
+- All five features implemented, tested, and documented
 - End-to-end clinical workflows exercisable
 - Feature interactions understood and documented
 - Ready for holistic security hardening

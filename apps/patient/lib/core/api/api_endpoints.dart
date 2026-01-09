@@ -43,6 +43,19 @@ class ApiEndpoints {
   /// Get download URL for a document
   static String documentDownloadUrl(String id) => '/patient/documents/$id/download-url';
 
+  // Lab endpoints
+  static const String labs = '/patient/labs';
+
+  /// Get a specific lab report
+  static String lab(String id) => '/patient/labs/$id';
+
+  /// Get lab results for a report
+  static String labResults(String id) => '/patient/labs/$id/results';
+
+  /// Get/update/delete a specific lab result
+  static String labResult(String labId, String resultId) =>
+      '/patient/labs/$labId/results/$resultId';
+
   /// Leave a clinic
   static String leaveClinic(String clinicId) => '/patient/clinics/$clinicId/leave';
 

@@ -31,6 +31,7 @@ model Patient {
   profileAudits         PatientProfileAudit[]
   medications           Medication[]
   documents             Document[]
+  labReports            LabReport[]
 
   @@map("patients")
 }
@@ -44,12 +45,13 @@ model Clinician {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  enrollments        Enrollment[]
-  interactionLogs    InteractionLog[]
-  acknowledgedAlerts Alert[]
-  clinicianNotes     ClinicianNote[]
-  clinicMemberships  ClinicMembership[]
-  createdInvites     Invite[]           @relation("InvitesCreated")
+  enrollments          Enrollment[]
+  interactionLogs      InteractionLog[]
+  acknowledgedAlerts   Alert[]
+  clinicianNotes       ClinicianNote[]
+  clinicMemberships    ClinicMembership[]
+  createdInvites       Invite[]           @relation("InvitesCreated")
+  verifiedLabReports   LabReport[]
 
   @@map("clinicians")
 }
@@ -218,6 +220,7 @@ enum InteractionType {
   PATIENT_MEDICATION
   PATIENT_ADHERENCE_LOG
   PATIENT_DOCUMENT
+  PATIENT_LAB_REPORT
   CLINICIAN_VIEW
   CLINICIAN_ALERT_ACK
   CLINICIAN_NOTE
@@ -225,6 +228,9 @@ enum InteractionType {
   CLINICIAN_MESSAGE
   CLINICIAN_MEDICATION_VIEW
   CLINICIAN_DOCUMENT_VIEW
+  CLINICIAN_LAB_VIEW
+  CLINICIAN_LAB_VERIFY
+  CLINICIAN_LAB_CREATE
 }
 
 // ============================================
@@ -404,9 +410,80 @@ model Document {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
+  labReports   LabReport[]                   // Structured lab data extracted from this document
+
   @@index([patientId, uploadedAt])
   @@index([patientId, type])
   @@map("documents")
+}
+
+// ============================================
+// Slice 2.5: Structured Lab Results
+// ============================================
+
+enum LabSource {
+  MANUAL_PATIENT
+  MANUAL_CLINICIAN
+  IMPORTED
+}
+
+enum LabResultFlag {
+  H   // High
+  L   // Low
+  C   // Critical
+}
+
+model LabReport {
+  id               String      @id @default(uuid())
+  patientId        String
+  patient          Patient     @relation(fields: [patientId], references: [id])
+
+  documentId       String?                     // Optional link to source PDF
+  document         Document?   @relation(fields: [documentId], references: [id])
+
+  collectedAt      DateTime                    // Date/time of blood draw
+  reportedAt       DateTime?                   // Date lab reported results
+  labName          String?                     // e.g., "Quest Diagnostics"
+  orderingProvider String?
+  notes            String?
+
+  source           LabSource   @default(MANUAL_PATIENT)
+
+  verifiedAt       DateTime?
+  verifiedById     String?
+  verifiedBy       Clinician?  @relation(fields: [verifiedById], references: [id])
+
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  results          LabResult[]
+
+  @@index([patientId, collectedAt])
+  @@index([documentId])
+  @@map("lab_reports")
+}
+
+model LabResult {
+  id                 String         @id @default(uuid())
+  reportId           String
+  report             LabReport      @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  analyteCode        String?                   // LOINC code (for future standardization)
+  analyteName        String                    // Display name
+
+  value              Decimal        @db.Decimal(10, 4)
+  unit               String
+
+  referenceRangeLow  Decimal?       @db.Decimal(10, 4)
+  referenceRangeHigh Decimal?       @db.Decimal(10, 4)
+  flag               LabResultFlag?
+
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@unique([reportId, analyteName])
+  @@index([reportId])
+  @@map("lab_results")
 }
 
 // ============================================

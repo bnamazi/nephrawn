@@ -189,3 +189,30 @@ Consequence:
 - Each slice: implemented, tested, documented, committed
 - No partial slices; no mixing slices
 - Hardening happens once, after all features complete
+
+## 2026-01 — Manual-first approach for structured lab results
+
+Context: Lab results are critical for CKD management. Three approaches were considered:
+1. **Document-only**: Upload PDFs, defer structured data (limited clinical utility)
+2. **Automated parsing**: OCR/ML to extract values from PDFs (complex, error-prone)
+3. **Manual-first with extension points**: Structured entry now, automation hooks for later
+
+Decision: Implement manual entry with extension points for future automation:
+- `LabReport.documentId` — Optional link to source PDF
+- `LabReport.source` enum — Distinguishes MANUAL_PATIENT, MANUAL_CLINICIAN, IMPORTED
+- `LabResult.analyteCode` — Supports LOINC codes for future standardization
+- Clinician verification workflow — Adds trust layer to patient-entered data
+
+Rationale:
+- PDF parsing requires OCR/ML infrastructure (deferred complexity)
+- Lab API integration requires vendor partnerships (deferred dependency)
+- Manual entry works immediately and captures structured data
+- Data model supports future automation without schema changes
+- Verification workflow ensures clinical accuracy
+
+Consequence:
+- Patients and clinicians can enter structured lab data immediately
+- Common CKD analytes available as quick-picks (Creatinine, eGFR, BUN, etc.)
+- Clinicians can verify patient-entered labs
+- Future: OCR can populate drafts for manual verification
+- Future: Lab provider APIs can auto-import with source = IMPORTED

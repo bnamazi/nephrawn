@@ -320,7 +320,69 @@ Invite ──────┬───── one Clinic
              └───── one Patient (claimedBy, nullable)
 
 Alert ─────── many ClinicianNotes (via alertId)
+
+LabReport ───┬───── one Patient
+             ├───── one Document (optional)
+             ├───── one Clinician (verifiedBy, optional)
+             └───── many LabResults
+
+LabResult ──── one LabReport
 ```
+
+---
+
+## Prototype Entities (Implemented)
+
+### LabReport
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| patientId | UUID | FK → Patient |
+| documentId | UUID | Nullable; FK → Document (source PDF link) |
+| collectedAt | timestamp | Date/time of blood draw |
+| reportedAt | timestamp | Nullable; when lab reported results |
+| labName | string | Nullable; e.g., "Quest Diagnostics" |
+| orderingProvider | string | Nullable |
+| notes | text | Nullable |
+| source | enum | MANUAL_PATIENT, MANUAL_CLINICIAN, IMPORTED |
+| verifiedAt | timestamp | Nullable; when clinician verified |
+| verifiedById | UUID | Nullable; FK → Clinician |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+**Indexes**:
+- `@@index([patientId, collectedAt])` — Patient lab timeline
+- `@@index([documentId])` — Document lookup
+
+### LabResult
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| reportId | UUID | FK → LabReport (cascade delete) |
+| analyteCode | string | Nullable; LOINC code for standardization |
+| analyteName | string | Display name (e.g., "Creatinine") |
+| value | decimal(10,4) | Numeric result |
+| unit | string | Unit of measurement |
+| referenceRangeLow | decimal(10,4) | Nullable; lower bound |
+| referenceRangeHigh | decimal(10,4) | Nullable; upper bound |
+| flag | enum | Nullable; H (High), L (Low), C (Critical) |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+**Constraints**:
+- `@@unique([reportId, analyteName])` — One result per analyte per report
+- `@@index([reportId])` — Results by report
+
+**LabSource Enum Values**: MANUAL_PATIENT, MANUAL_CLINICIAN, IMPORTED
+
+**LabResultFlag Enum Values**: H (High), L (Low), C (Critical)
+
+**Design Notes**:
+- `source` distinguishes patient-entered from clinician-entered labs
+- `verifiedAt`/`verifiedById` enables clinician verification workflow
+- `analyteCode` supports future LOINC standardization
+- `documentId` optionally links to source PDF (Document entity)
+- Cascade delete ensures orphan cleanup when report is deleted
 
 ---
 

@@ -86,6 +86,14 @@
 | POST | `/patient/medications/:id/log` | Log adherence (taken/skipped) |
 | GET | `/patient/medications/:id/logs` | Get adherence history |
 | GET | `/patient/medications/summary` | Adherence summary |
+| GET | `/patient/labs` | List own lab reports |
+| POST | `/patient/labs` | Create lab report with results |
+| GET | `/patient/labs/:id` | Get single lab report |
+| PUT | `/patient/labs/:id` | Update lab report |
+| DELETE | `/patient/labs/:id` | Delete lab report |
+| POST | `/patient/labs/:id/results` | Add result to report |
+| PUT | `/patient/labs/:id/results/:resultId` | Update result |
+| DELETE | `/patient/labs/:id/results/:resultId` | Delete result |
 
 ### Clinician Routes (`/clinician`) — requires clinician/admin role
 | Method | Endpoint | Description |
@@ -107,6 +115,14 @@
 | POST | `/clinician/patients/:patientId/notes` | Create note for patient |
 | GET | `/clinician/patients/:patientId/medications` | Patient's medications |
 | GET | `/clinician/patients/:patientId/medications/summary` | Patient's adherence summary |
+| GET | `/clinician/patients/:patientId/labs` | Patient's lab reports |
+| POST | `/clinician/patients/:patientId/labs` | Create lab for patient |
+| GET | `/clinician/patients/:patientId/labs/:id` | Get lab report |
+| PUT | `/clinician/patients/:patientId/labs/:id` | Update lab report |
+| POST | `/clinician/patients/:patientId/labs/:id/verify` | Verify lab report |
+| POST | `/clinician/patients/:patientId/labs/:id/results` | Add result |
+| PUT | `/clinician/patients/:patientId/labs/:id/results/:resultId` | Update result |
+| DELETE | `/clinician/patients/:patientId/labs/:id/results/:resultId` | Delete result |
 | GET | `/clinician/alerts` | All alerts for enrolled patients |
 | GET | `/clinician/alerts/:alertId` | Single alert details |
 | POST | `/clinician/alerts/:alertId/acknowledge` | Acknowledge alert |
@@ -138,6 +154,7 @@
 - Symptom check-in form
 - Measurement entry (weight, BP)
 - Medication tracking (CRUD, adherence logging, summary)
+- Lab results entry (structured analyte data with reference ranges)
 - View own history (read-only)
 - View enrolled clinics, self-discharge
 
@@ -146,9 +163,10 @@
 - Clinic switcher (multi-clinic support)
 - Clinic settings (Owner/Admin only): member management, role changes
 - Patient list (enrolled patients)
-- Patient detail with tabs: Overview, Measurements, Symptoms, Medications, Notes
+- Patient detail with tabs: Overview, Measurements, Symptoms, Labs, Medications, Documents, Profile, Care Plan, Notes
 - Patient clinical profile (CKD stage, comorbidities, medications)
 - Patient medication list with adherence summary
+- Patient lab results with verification workflow
 - Care plan management (dry weight, BP targets, risk flags)
 - Profile completeness banners (showTargetsBanner, showProfileBanner)
 - Symptom check-in history with severity badges
@@ -232,6 +250,32 @@ These features are in active development as part of prototype scope.
 - `POST /patient/medications/:id/log` — Log adherence
 - `GET /patient/medications/:id/adherence` — Adherence history
 - `GET /clinician/patients/:patientId/medications` — View patient medications
+
+### 5. Structured Lab Results (Slice 2.5)
+
+**Schema additions:**
+- `LabReport` — Lab report metadata (patientId, collectedAt, labName, source, verification)
+- `LabResult` — Individual analyte results (analyteName, value, unit, referenceRange, flag)
+- `LabSource` enum — MANUAL_PATIENT, MANUAL_CLINICIAN, IMPORTED
+- `LabResultFlag` enum — H (High), L (Low), C (Critical)
+
+**Services:**
+- `LabService` — CRUD for lab reports and results, verification workflow
+
+**APIs:**
+- `GET /patient/labs` — List own lab reports
+- `POST /patient/labs` — Create lab report with results
+- `PUT /patient/labs/:id` — Update lab report
+- `DELETE /patient/labs/:id` — Delete lab report
+- `POST /patient/labs/:id/results` — Add result to report
+- `GET /clinician/patients/:patientId/labs` — View patient labs
+- `POST /clinician/patients/:patientId/labs` — Create lab for patient
+- `POST /clinician/patients/:patientId/labs/:id/verify` — Verify lab report
+
+**Extension points:**
+- `documentId` — Optional link to source PDF for future OCR parsing
+- `analyteCode` — LOINC code support for future lab provider API integration
+- `source = IMPORTED` — Reserved for future automated imports
 
 ---
 

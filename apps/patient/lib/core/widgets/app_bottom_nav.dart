@@ -8,7 +8,8 @@ enum NavIndex {
   weight(1),
   bp(2),
   symptoms(3),
-  medications(4);
+  medications(4),
+  labs(5);
 
   final int value;
   const NavIndex(this.value);
@@ -46,6 +47,9 @@ class AppBottomNav extends StatelessWidget {
           case 4:
             context.go(Routes.medications);
             break;
+          case 5:
+            context.go(Routes.labs);
+            break;
         }
       },
       destinations: const [
@@ -73,6 +77,11 @@ class AppBottomNav extends StatelessWidget {
           icon: Icon(Icons.medication_outlined),
           selectedIcon: Icon(Icons.medication),
           label: 'Meds',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.science_outlined),
+          selectedIcon: Icon(Icons.science),
+          label: 'Labs',
         ),
       ],
     );

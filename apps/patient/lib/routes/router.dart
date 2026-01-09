@@ -22,6 +22,9 @@ import '../features/medications/medications_screen.dart';
 import '../features/medications/medication_entry_screen.dart';
 import '../features/medications/medication_detail_screen.dart';
 import '../features/documents/documents_screen.dart';
+import '../features/labs/labs_screen.dart';
+import '../features/labs/lab_detail_screen.dart';
+import '../features/labs/lab_entry_screen.dart';
 
 /// Route paths
 class Routes {
@@ -51,6 +54,10 @@ class Routes {
   static const String medicationDetail = '/medication';
   // Documents
   static const String documents = '/documents';
+  // Labs
+  static const String labs = '/labs';
+  static const String labDetail = '/labs';
+  static const String addLab = '/add-lab';
 }
 
 /// Create app router with auth guards
@@ -174,6 +181,21 @@ GoRouter createRouter(AuthProvider authProvider) {
       GoRoute(
         path: Routes.documents,
         builder: (context, state) => const DocumentsScreen(),
+      ),
+      GoRoute(
+        path: Routes.labs,
+        builder: (context, state) => const LabsScreen(),
+      ),
+      GoRoute(
+        path: '${Routes.labDetail}/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return LabDetailScreen(labId: id);
+        },
+      ),
+      GoRoute(
+        path: Routes.addLab,
+        builder: (context, state) => const LabEntryScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

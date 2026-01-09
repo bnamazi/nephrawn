@@ -198,3 +198,49 @@ export const documentMetadataSchema = z.object({
 
 export type UploadRequestDto = z.infer<typeof uploadRequestSchema>;
 export type DocumentMetadataDto = z.infer<typeof documentMetadataSchema>;
+
+// Lab result validation
+export const labResultFlagSchema = z.enum(["H", "L", "C"]);
+
+export const labResultSchema = z.object({
+  analyteName: z.string().min(1, "Analyte name is required").max(100, "Analyte name is too long"),
+  analyteCode: z.string().max(50, "Analyte code is too long").optional(),
+  value: z.number({ error: "Value must be a number" }),
+  unit: z.string().min(1, "Unit is required").max(20, "Unit is too long"),
+  referenceRangeLow: z.number().optional(),
+  referenceRangeHigh: z.number().optional(),
+  flag: labResultFlagSchema.optional(),
+});
+
+export const labReportSchema = z.object({
+  collectedAt: z.string().datetime(),
+  reportedAt: z.string().datetime().optional(),
+  labName: z.string().max(200, "Lab name is too long").optional(),
+  orderingProvider: z.string().max(200, "Provider name is too long").optional(),
+  notes: z.string().max(1000, "Notes are too long").optional(),
+  documentId: z.string().uuid().optional(),
+  results: z.array(labResultSchema).optional(),
+});
+
+export const labReportUpdateSchema = z.object({
+  collectedAt: z.string().datetime().optional(),
+  reportedAt: z.string().datetime().optional().nullable(),
+  labName: z.string().max(200, "Lab name is too long").optional().nullable(),
+  orderingProvider: z.string().max(200, "Provider name is too long").optional().nullable(),
+  notes: z.string().max(1000, "Notes are too long").optional().nullable(),
+});
+
+export const labResultUpdateSchema = z.object({
+  analyteName: z.string().min(1, "Analyte name is required").max(100, "Analyte name is too long").optional(),
+  analyteCode: z.string().max(50, "Analyte code is too long").optional().nullable(),
+  value: z.number().optional(),
+  unit: z.string().min(1, "Unit is required").max(20, "Unit is too long").optional(),
+  referenceRangeLow: z.number().optional().nullable(),
+  referenceRangeHigh: z.number().optional().nullable(),
+  flag: labResultFlagSchema.optional().nullable(),
+});
+
+export type LabResultDto = z.infer<typeof labResultSchema>;
+export type LabReportDto = z.infer<typeof labReportSchema>;
+export type LabReportUpdateDto = z.infer<typeof labReportUpdateSchema>;
+export type LabResultUpdateDto = z.infer<typeof labResultUpdateSchema>;

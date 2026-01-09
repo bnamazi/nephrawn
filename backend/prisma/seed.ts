@@ -377,6 +377,358 @@ async function main() {
 
   console.log("Created care plans");
 
+  // Create lab reports with realistic CKD data
+  // Patient 1 (John Smith - CKD Stage 4) - Recent labs showing progression
+  const labReport1 = await prisma.labReport.create({
+    data: {
+      patientId: patient1.id,
+      collectedAt: new Date("2026-01-03"),
+      reportedAt: new Date("2026-01-04"),
+      labName: "Quest Diagnostics",
+      orderingProvider: "Dr. Sarah Chen",
+      source: "MANUAL_CLINICIAN",
+      verifiedAt: new Date(),
+      verifiedById: clinician1.id,
+      results: {
+        create: [
+          {
+            analyteName: "Creatinine",
+            analyteCode: "2160-0",
+            value: 3.2,
+            unit: "mg/dL",
+            referenceRangeLow: 0.7,
+            referenceRangeHigh: 1.3,
+            flag: "H",
+          },
+          {
+            analyteName: "eGFR",
+            analyteCode: "33914-3",
+            value: 18,
+            unit: "mL/min/1.73m2",
+            referenceRangeLow: 60,
+            referenceRangeHigh: 120,
+            flag: "L",
+          },
+          {
+            analyteName: "BUN",
+            analyteCode: "3094-0",
+            value: 42,
+            unit: "mg/dL",
+            referenceRangeLow: 7,
+            referenceRangeHigh: 20,
+            flag: "H",
+          },
+          {
+            analyteName: "Potassium",
+            analyteCode: "2823-3",
+            value: 5.3,
+            unit: "mEq/L",
+            referenceRangeLow: 3.5,
+            referenceRangeHigh: 5.0,
+            flag: "H",
+          },
+          {
+            analyteName: "Sodium",
+            analyteCode: "2951-2",
+            value: 138,
+            unit: "mEq/L",
+            referenceRangeLow: 136,
+            referenceRangeHigh: 145,
+            flag: null,
+          },
+          {
+            analyteName: "CO2/Bicarbonate",
+            analyteCode: "1963-8",
+            value: 19,
+            unit: "mEq/L",
+            referenceRangeLow: 22,
+            referenceRangeHigh: 29,
+            flag: "L",
+          },
+          {
+            analyteName: "Hemoglobin",
+            analyteCode: "718-7",
+            value: 10.2,
+            unit: "g/dL",
+            referenceRangeLow: 13.5,
+            referenceRangeHigh: 17.5,
+            flag: "L",
+          },
+          {
+            analyteName: "Phosphorus",
+            analyteCode: "2777-1",
+            value: 5.8,
+            unit: "mg/dL",
+            referenceRangeLow: 2.5,
+            referenceRangeHigh: 4.5,
+            flag: "H",
+          },
+          {
+            analyteName: "Calcium",
+            analyteCode: "17861-6",
+            value: 8.9,
+            unit: "mg/dL",
+            referenceRangeLow: 8.5,
+            referenceRangeHigh: 10.5,
+            flag: null,
+          },
+          {
+            analyteName: "Albumin",
+            analyteCode: "1751-7",
+            value: 3.6,
+            unit: "g/dL",
+            referenceRangeLow: 3.5,
+            referenceRangeHigh: 5.0,
+            flag: null,
+          },
+        ],
+      },
+    },
+  });
+
+  // Patient 1 - Historical labs (3 months ago)
+  const labReport2 = await prisma.labReport.create({
+    data: {
+      patientId: patient1.id,
+      collectedAt: new Date("2025-10-01"),
+      reportedAt: new Date("2025-10-02"),
+      labName: "Quest Diagnostics",
+      orderingProvider: "Dr. Sarah Chen",
+      source: "MANUAL_CLINICIAN",
+      verifiedAt: new Date("2025-10-03"),
+      verifiedById: clinician1.id,
+      results: {
+        create: [
+          {
+            analyteName: "Creatinine",
+            analyteCode: "2160-0",
+            value: 2.9,
+            unit: "mg/dL",
+            referenceRangeLow: 0.7,
+            referenceRangeHigh: 1.3,
+            flag: "H",
+          },
+          {
+            analyteName: "eGFR",
+            analyteCode: "33914-3",
+            value: 22,
+            unit: "mL/min/1.73m2",
+            referenceRangeLow: 60,
+            referenceRangeHigh: 120,
+            flag: "L",
+          },
+          {
+            analyteName: "BUN",
+            analyteCode: "3094-0",
+            value: 38,
+            unit: "mg/dL",
+            referenceRangeLow: 7,
+            referenceRangeHigh: 20,
+            flag: "H",
+          },
+          {
+            analyteName: "Potassium",
+            analyteCode: "2823-3",
+            value: 5.0,
+            unit: "mEq/L",
+            referenceRangeLow: 3.5,
+            referenceRangeHigh: 5.0,
+            flag: null,
+          },
+          {
+            analyteName: "Hemoglobin",
+            analyteCode: "718-7",
+            value: 10.8,
+            unit: "g/dL",
+            referenceRangeLow: 13.5,
+            referenceRangeHigh: 17.5,
+            flag: "L",
+          },
+        ],
+      },
+    },
+  });
+
+  // Patient 2 (Mary Johnson - CKD Stage 3B) - Labs showing stable CKD
+  const labReport3 = await prisma.labReport.create({
+    data: {
+      patientId: patient2.id,
+      collectedAt: new Date("2025-12-15"),
+      reportedAt: new Date("2025-12-16"),
+      labName: "LabCorp",
+      orderingProvider: "Dr. Sarah Chen",
+      source: "MANUAL_CLINICIAN",
+      verifiedAt: new Date("2025-12-17"),
+      verifiedById: clinician1.id,
+      results: {
+        create: [
+          {
+            analyteName: "Creatinine",
+            analyteCode: "2160-0",
+            value: 1.8,
+            unit: "mg/dL",
+            referenceRangeLow: 0.6,
+            referenceRangeHigh: 1.2,
+            flag: "H",
+          },
+          {
+            analyteName: "eGFR",
+            analyteCode: "33914-3",
+            value: 38,
+            unit: "mL/min/1.73m2",
+            referenceRangeLow: 60,
+            referenceRangeHigh: 120,
+            flag: "L",
+          },
+          {
+            analyteName: "BUN",
+            analyteCode: "3094-0",
+            value: 28,
+            unit: "mg/dL",
+            referenceRangeLow: 7,
+            referenceRangeHigh: 20,
+            flag: "H",
+          },
+          {
+            analyteName: "Potassium",
+            analyteCode: "2823-3",
+            value: 4.2,
+            unit: "mEq/L",
+            referenceRangeLow: 3.5,
+            referenceRangeHigh: 5.0,
+            flag: null,
+          },
+          {
+            analyteName: "Hemoglobin",
+            analyteCode: "718-7",
+            value: 12.1,
+            unit: "g/dL",
+            referenceRangeLow: 12.0,
+            referenceRangeHigh: 16.0,
+            flag: null,
+          },
+          {
+            analyteName: "ACR",
+            analyteCode: "13705-9",
+            value: 85,
+            unit: "mg/g",
+            referenceRangeLow: 0,
+            referenceRangeHigh: 30,
+            flag: "H",
+          },
+        ],
+      },
+    },
+  });
+
+  // Patient 4 (Patricia Brown - CKD Stage 5D on HD) - Pre-dialysis labs with critical values
+  const labReport4 = await prisma.labReport.create({
+    data: {
+      patientId: patient4.id,
+      collectedAt: new Date("2026-01-06"),
+      reportedAt: new Date("2026-01-06"),
+      labName: "Dialysis Center Lab",
+      orderingProvider: "Dr. Michael Rivera",
+      source: "MANUAL_CLINICIAN",
+      verifiedAt: new Date(),
+      verifiedById: clinician2.id,
+      notes: "Pre-dialysis labs. Patient reported feeling fatigued.",
+      results: {
+        create: [
+          {
+            analyteName: "Creatinine",
+            analyteCode: "2160-0",
+            value: 8.5,
+            unit: "mg/dL",
+            referenceRangeLow: 0.6,
+            referenceRangeHigh: 1.2,
+            flag: "H",
+          },
+          {
+            analyteName: "BUN",
+            analyteCode: "3094-0",
+            value: 72,
+            unit: "mg/dL",
+            referenceRangeLow: 7,
+            referenceRangeHigh: 20,
+            flag: "H",
+          },
+          {
+            analyteName: "Potassium",
+            analyteCode: "2823-3",
+            value: 5.9,
+            unit: "mEq/L",
+            referenceRangeLow: 3.5,
+            referenceRangeHigh: 5.0,
+            flag: "C",
+          },
+          {
+            analyteName: "Phosphorus",
+            analyteCode: "2777-1",
+            value: 7.2,
+            unit: "mg/dL",
+            referenceRangeLow: 2.5,
+            referenceRangeHigh: 4.5,
+            flag: "C",
+          },
+          {
+            analyteName: "Hemoglobin",
+            analyteCode: "718-7",
+            value: 9.1,
+            unit: "g/dL",
+            referenceRangeLow: 12.0,
+            referenceRangeHigh: 16.0,
+            flag: "L",
+          },
+          {
+            analyteName: "PTH",
+            analyteCode: "2731-8",
+            value: 485,
+            unit: "pg/mL",
+            referenceRangeLow: 10,
+            referenceRangeHigh: 65,
+            flag: "H",
+          },
+          {
+            analyteName: "Calcium",
+            analyteCode: "17861-6",
+            value: 8.2,
+            unit: "mg/dL",
+            referenceRangeLow: 8.5,
+            referenceRangeHigh: 10.5,
+            flag: "L",
+          },
+        ],
+      },
+    },
+  });
+
+  // Patient 1 - Unverified lab (patient-entered)
+  const labReport5 = await prisma.labReport.create({
+    data: {
+      patientId: patient1.id,
+      collectedAt: new Date("2026-01-07"),
+      labName: "Home Test Kit",
+      source: "MANUAL_PATIENT",
+      notes: "At-home ACR test",
+      results: {
+        create: [
+          {
+            analyteName: "ACR",
+            analyteCode: "13705-9",
+            value: 320,
+            unit: "mg/g",
+            referenceRangeLow: 0,
+            referenceRangeHigh: 30,
+            flag: "H",
+          },
+        ],
+      },
+    },
+  });
+
+  console.log("Created lab reports:", labReport1.id, labReport2.id, labReport3.id, labReport4.id, labReport5.id);
+
   console.log("\n--- Test Credentials ---");
   console.log("Clinician 1: clinician1@test.com / password123");
   console.log("Clinician 2: clinician2@test.com / password123");

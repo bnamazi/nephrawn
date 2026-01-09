@@ -527,3 +527,78 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   LAB_RESULT: 'Lab Result',
   OTHER: 'Other',
 };
+
+// ============================================
+// Lab Result Types
+// ============================================
+
+export type LabSource = 'MANUAL_PATIENT' | 'MANUAL_CLINICIAN' | 'IMPORTED';
+export type LabResultFlag = 'H' | 'L' | 'C';
+
+export interface LabResult {
+  id: string;
+  analyteName: string;
+  analyteCode: string | null;
+  value: number;
+  unit: string;
+  referenceRangeLow: number | null;
+  referenceRangeHigh: number | null;
+  flag: LabResultFlag | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LabReport {
+  id: string;
+  patientId: string;
+  documentId: string | null;
+  collectedAt: string;
+  reportedAt: string | null;
+  labName: string | null;
+  orderingProvider: string | null;
+  notes: string | null;
+  source: LabSource;
+  verifiedAt: string | null;
+  verifiedById: string | null;
+  verifiedBy: { id: string; name: string } | null;
+  results: LabResult[];
+  document: { id: string; filename: string; storageKey: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LabReportsResponse {
+  labReports: LabReport[];
+}
+
+export interface LabReportResponse {
+  labReport: LabReport;
+}
+
+export const LAB_SOURCE_LABELS: Record<LabSource, string> = {
+  MANUAL_PATIENT: 'Entered by Patient',
+  MANUAL_CLINICIAN: 'Entered by Clinician',
+  IMPORTED: 'Imported',
+};
+
+export const LAB_FLAG_LABELS: Record<LabResultFlag, string> = {
+  H: 'High',
+  L: 'Low',
+  C: 'Critical',
+};
+
+// Common CKD analytes for quick-pick
+export const CKD_ANALYTES = [
+  { name: 'Creatinine', unit: 'mg/dL', code: '2160-0' },
+  { name: 'eGFR', unit: 'mL/min/1.73m2', code: '33914-3' },
+  { name: 'BUN', unit: 'mg/dL', code: '3094-0' },
+  { name: 'Potassium', unit: 'mEq/L', code: '2823-3' },
+  { name: 'Sodium', unit: 'mEq/L', code: '2951-2' },
+  { name: 'CO2/Bicarbonate', unit: 'mEq/L', code: '1963-8' },
+  { name: 'Albumin', unit: 'g/dL', code: '1751-7' },
+  { name: 'Hemoglobin', unit: 'g/dL', code: '718-7' },
+  { name: 'Phosphorus', unit: 'mg/dL', code: '2777-1' },
+  { name: 'Calcium', unit: 'mg/dL', code: '17861-6' },
+  { name: 'PTH', unit: 'pg/mL', code: '2731-8' },
+  { name: 'ACR', unit: 'mg/g', code: '13705-9' },
+] as const;
