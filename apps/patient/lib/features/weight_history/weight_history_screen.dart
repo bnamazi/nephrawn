@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/widgets/app_bottom_nav.dart';
+import '../../core/widgets/source_badge.dart';
 import '../../routes/router.dart';
 import 'weight_chart.dart';
 import 'weight_history_provider.dart';
@@ -153,6 +154,32 @@ class _WeightHistoryScreenContent extends StatelessWidget {
                     ),
                   ),
                 ),
+                // Body composition link
+                SliverToBoxAdapter(
+                  child: Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    child: ListTile(
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.accessibility_new,
+                          color: Colors.green.shade600,
+                          size: 20,
+                        ),
+                      ),
+                      title: const Text('Body Composition'),
+                      subtitle: const Text('View fat %, muscle mass & more'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push(Routes.bodyComposition),
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 8)),
                 // List header
                 SliverToBoxAdapter(
                   child: Padding(
@@ -219,9 +246,15 @@ class _WeightHistoryItem extends StatelessWidget {
             size: 20,
           ),
         ),
-        title: Text(
-          '${measurement.displayValue.toStringAsFixed(1)} ${measurement.displayUnit}',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        title: Row(
+          children: [
+            Text(
+              '${measurement.displayValue.toStringAsFixed(1)} ${measurement.displayUnit}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(width: 8),
+            SourceBadge(source: measurement.source),
+          ],
         ),
         subtitle: Text(
           _formatDate(measurement.timestamp),

@@ -51,8 +51,76 @@ import {
   updateLabResult,
   deleteLabResult,
 } from "../services/lab.service.js";
+import {
+  initiateWithingsAuth,
+  handleWithingsCallback,
+  disconnectDevice,
+  getDeviceConnections,
+  getDeviceConnection,
+  syncWithingsData,
+} from "../services/device.service.js";
 
 const router = Router();
+
+// Helper to render OAuth result page
+const renderOAuthResultPage = (success: boolean, message: string) => `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${success ? 'Connected' : 'Error'} - Nephrawn</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+           display: flex; justify-content: center; align-items: center; min-height: 100vh;
+           margin: 0; background: ${success ? '#f0fdf4' : '#fef2f2'}; }
+    .container { text-align: center; padding: 40px; }
+    .icon { font-size: 64px; margin-bottom: 20px; }
+    h1 { color: ${success ? '#166534' : '#991b1b'}; margin: 0 0 12px; }
+    p { color: #6b7280; margin: 0 0 24px; }
+    .hint { font-size: 14px; color: #9ca3af; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">${success ? '✓' : '✗'}</div>
+    <h1>${success ? 'Connected!' : 'Connection Failed'}</h1>
+    <p>${message}</p>
+    <p class="hint">You can close this window and return to the app.</p>
+  </div>
+</body>
+</html>
+`;
+
+// OAuth callback - must be BEFORE auth middleware (browser redirect from Withings)
+router.get("/devices/withings/callback", async (req: Request, res: Response) => {
+  try {
+    const { code, state, error: oauthError } = req.query;
+
+    if (oauthError) {
+      logger.warn({ oauthError }, "Withings OAuth error");
+      res.send(renderOAuthResultPage(false, "Authorization was denied. Please try again."));
+      return;
+    }
+
+    if (!code || !state) {
+      res.send(renderOAuthResultPage(false, "Missing parameters. Please try again."));
+      return;
+    }
+
+    const { connection, patientId } = await handleWithingsCallback(
+      code as string,
+      state as string
+    );
+
+    logger.info({ patientId, connectionId: connection.id }, "Withings connected");
+
+    res.send(renderOAuthResultPage(true, "Your Withings devices are now connected."));
+  } catch (error) {
+    logger.error({ err: error }, "Withings callback failed");
+    res.send(renderOAuthResultPage(false, "Failed to connect. Please try again."));
+  }
+});
 
 // All patient routes require authentication and patient role
 router.use(authenticate);
@@ -742,6 +810,150 @@ router.delete("/labs/:id/results/:resultId", async (req: Request, res: Response)
   }
 });
 
+// ============================================
+// Devices (Withings Integration)
+// ============================================
+
+// Device type definitions for UI
+const DEVICE_TYPES = {
+  blood_pressure_monitor: {
+    name: "Blood Pressure Monitor",
+    measurementTypes: ["BP_SYSTOLIC", "BP_DIASTOLIC"] as MeasurementType[],
+    icon: "favorite",
+  },
+  smart_scale: {
+    name: "Smart Scale",
+    measurementTypes: [
+      "WEIGHT", "FAT_FREE_MASS", "FAT_RATIO", "FAT_MASS",
+      "MUSCLE_MASS", "HYDRATION", "BONE_MASS", "PULSE_WAVE_VELOCITY"
+    ] as MeasurementType[],
+    icon: "monitor_weight",
+  },
+} as const;
+
+// GET /patient/devices - List connected devices with device type info
+router.get("/devices", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const connections = await getDeviceConnections(patientId);
+
+    // Check if there's an active vendor connection
+    const hasActiveConnection = connections.some(c => c.status === "ACTIVE");
+
+    // Get last measurement per device type from device sources
+    const deviceTypes = await Promise.all(
+      Object.entries(DEVICE_TYPES).map(async ([typeId, config]) => {
+        // Find most recent device-sourced measurement for this device type
+        const lastMeasurement = await prisma.measurement.findFirst({
+          where: {
+            patientId,
+            type: { in: config.measurementTypes },
+            source: { not: "manual" },
+          },
+          orderBy: { timestamp: "desc" },
+          select: {
+            timestamp: true,
+            source: true,
+            type: true,
+          },
+        });
+
+        // Device is connected only if there's an active vendor connection AND we have measurements
+        const isConnected = hasActiveConnection && lastMeasurement !== null;
+
+        return {
+          id: typeId,
+          name: config.name,
+          icon: config.icon,
+          connected: isConnected,
+          source: isConnected ? lastMeasurement?.source : null,
+          lastSync: isConnected ? lastMeasurement?.timestamp?.toISOString() : null,
+        };
+      })
+    );
+
+    res.json({
+      devices: connections,
+      deviceTypes,
+    });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch devices");
+    res.status(500).json({ error: "Failed to fetch devices" });
+  }
+});
+
+// GET /patient/devices/withings - Get Withings connection status
+router.get("/devices/withings", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const connection = await getDeviceConnection(patientId, "WITHINGS");
+
+    if (!connection) {
+      res.json({ connected: false, connection: null });
+      return;
+    }
+
+    res.json({ connected: connection.status === "ACTIVE", connection });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch Withings status");
+    res.status(500).json({ error: "Failed to fetch Withings status" });
+  }
+});
+
+// POST /patient/devices/withings/authorize - Initiate OAuth flow
+router.post("/devices/withings/authorize", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { authUrl, state } = initiateWithingsAuth(patientId);
+    res.json({ authUrl, state });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to initiate Withings auth");
+    res.status(500).json({ error: "Failed to initiate Withings authorization" });
+  }
+});
+
+// DELETE /patient/devices/withings - Disconnect Withings
+router.delete("/devices/withings", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    await disconnectDevice(patientId, "WITHINGS");
+    res.json({ success: true });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to disconnect Withings");
+    res.status(500).json({ error: "Failed to disconnect Withings" });
+  }
+});
+
+// POST /patient/devices/withings/sync - Trigger manual sync
+router.post("/devices/withings/sync", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const connection = await getDeviceConnection(patientId, "WITHINGS");
+
+    if (!connection) {
+      res.status(404).json({ error: "No Withings connection found" });
+      return;
+    }
+
+    if (connection.status !== "ACTIVE") {
+      res.status(400).json({ error: `Connection is ${connection.status}, cannot sync` });
+      return;
+    }
+
+    const result = await syncWithingsData(connection.id);
+
+    res.json({
+      success: true,
+      measurementsCreated: result.measurementsCreated,
+      measurementsSkipped: result.measurementsSkipped,
+      errors: result.errors.length > 0 ? result.errors : undefined,
+    });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to sync Withings");
+    res.status(500).json({ error: "Failed to sync Withings data" });
+  }
+});
+
 // GET /patient/clinics - Get clinics the patient is enrolled in
 router.get("/clinics", async (req: Request, res: Response) => {
   try {
@@ -1017,6 +1229,99 @@ router.get("/dashboard", async (req: Request, res: Response) => {
   }
 });
 
+// Body composition measurement types
+const BODY_COMP_TYPES: MeasurementType[] = [
+  "FAT_FREE_MASS", "FAT_RATIO", "FAT_MASS", "MUSCLE_MASS",
+  "HYDRATION", "BONE_MASS", "PULSE_WAVE_VELOCITY"
+];
+
+// GET /patient/body-composition - Get all body composition measurements
+router.get("/body-composition", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const { from: queryFrom, to: queryTo } = parseDateRange(req.query);
+    const limit = parseInt(req.query.limit as string) || 30;
+
+    // Default to last 30 days
+    const from = queryFrom ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const to = queryTo ?? new Date();
+
+    // Fetch all body composition measurements
+    const measurements = await prisma.measurement.findMany({
+      where: {
+        patientId,
+        type: { in: BODY_COMP_TYPES },
+        timestamp: { gte: from, lte: to },
+      },
+      orderBy: { timestamp: "desc" },
+      take: limit * BODY_COMP_TYPES.length, // Get enough for limit readings
+      select: {
+        id: true,
+        type: true,
+        value: true,
+        unit: true,
+        timestamp: true,
+        source: true,
+      },
+    });
+
+    // Group by timestamp (with 5-minute window for device readings)
+    const GROUPING_WINDOW_MS = 5 * 60 * 1000;
+    const grouped: Map<number, typeof measurements> = new Map();
+
+    for (const m of measurements) {
+      const time = m.timestamp.getTime();
+      let found = false;
+
+      for (const [key, group] of grouped) {
+        if (Math.abs(time - key) <= GROUPING_WINDOW_MS) {
+          group.push(m);
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
+        grouped.set(time, [m]);
+      }
+    }
+
+    // Convert to array of body composition readings
+    const readings = Array.from(grouped.entries())
+      .sort((a, b) => b[0] - a[0]) // Most recent first
+      .slice(0, limit)
+      .map(([timestamp, group]) => {
+        const reading: Record<string, unknown> = {
+          timestamp: new Date(timestamp).toISOString(),
+          source: group[0].source,
+        };
+
+        for (const m of group) {
+          const typeKey = m.type.toLowerCase();
+          reading[typeKey] = {
+            value: m.value.toNumber(),
+            unit: m.unit,
+          };
+        }
+
+        return reading;
+      });
+
+    res.json({
+      data: {
+        readings,
+        count: readings.length,
+        range: {
+          from: from.toISOString(),
+          to: to.toISOString(),
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch body composition data" });
+  }
+});
+
 // GET /patient/charts/:type - Get own time-series data for charting
 router.get("/charts/:type", async (req: Request, res: Response) => {
   try {
@@ -1039,7 +1344,12 @@ router.get("/charts/:type", async (req: Request, res: Response) => {
     }
 
     // Validate measurement type
-    const validTypes: MeasurementType[] = ["WEIGHT", "BP_SYSTOLIC", "BP_DIASTOLIC", "SPO2", "HEART_RATE"];
+    const validTypes: MeasurementType[] = [
+      "WEIGHT", "BP_SYSTOLIC", "BP_DIASTOLIC", "SPO2", "HEART_RATE",
+      // Body composition types
+      "FAT_FREE_MASS", "FAT_RATIO", "FAT_MASS", "MUSCLE_MASS",
+      "HYDRATION", "BONE_MASS", "PULSE_WAVE_VELOCITY"
+    ];
     if (!validTypes.includes(type as MeasurementType)) {
       res.status(400).json({ error: `Invalid type. Valid types: ${validTypes.join(", ")}, blood-pressure` });
       return;

@@ -32,6 +32,7 @@ model Patient {
   medications           Medication[]
   documents             Document[]
   labReports            LabReport[]
+  deviceConnections     DeviceConnection[]
 
   @@map("patients")
 }
@@ -281,6 +282,14 @@ enum MeasurementType {
   BP_DIASTOLIC
   SPO2
   HEART_RATE
+  // Body composition types (Withings Body Pro 2)
+  FAT_FREE_MASS       // kg - Lean mass
+  FAT_RATIO           // % - Body fat percentage
+  FAT_MASS            // kg - Fat mass weight
+  MUSCLE_MASS         // kg
+  HYDRATION           // kg - Body water
+  BONE_MASS           // kg
+  PULSE_WAVE_VELOCITY // m/s - Vascular age indicator
 }
 
 model Alert {
@@ -674,4 +683,44 @@ enum ActorType {
   PATIENT
   CLINICIAN
   SYSTEM
+}
+
+// ============================================
+// Slice 4: Device Integration (Withings)
+// ============================================
+
+model DeviceConnection {
+  id             String   @id @default(uuid())
+  patientId      String
+  patient        Patient  @relation(fields: [patientId], references: [id])
+
+  vendor         DeviceVendor             @default(WITHINGS)
+  accessToken    String                   // Encrypted
+  refreshToken   String                   // Encrypted
+  tokenExpiresAt DateTime
+
+  scope          String?                  // OAuth scopes granted
+  withingsUserId String?                  // Withings user ID for API calls
+
+  status         DeviceConnectionStatus   @default(ACTIVE)
+  lastSyncAt     DateTime?
+  lastSyncError  String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([patientId, vendor])
+  @@index([status, lastSyncAt])
+  @@map("device_connections")
+}
+
+enum DeviceVendor {
+  WITHINGS
+}
+
+enum DeviceConnectionStatus {
+  ACTIVE
+  EXPIRED     // Token expired, needs re-auth
+  REVOKED     // User disconnected
+  ERROR       // Persistent sync errors
 }

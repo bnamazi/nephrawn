@@ -25,6 +25,8 @@ import '../features/documents/documents_screen.dart';
 import '../features/labs/labs_screen.dart';
 import '../features/labs/lab_detail_screen.dart';
 import '../features/labs/lab_entry_screen.dart';
+import '../features/devices/devices_screen.dart';
+import '../features/body_composition/body_composition_screen.dart';
 
 /// Route paths
 class Routes {
@@ -58,6 +60,10 @@ class Routes {
   static const String labs = '/labs';
   static const String labDetail = '/labs';
   static const String addLab = '/add-lab';
+  // Devices
+  static const String devices = '/devices';
+  // Body composition
+  static const String bodyComposition = '/body-composition';
 }
 
 /// Create app router with auth guards
@@ -196,6 +202,14 @@ GoRouter createRouter(AuthProvider authProvider) {
       GoRoute(
         path: Routes.addLab,
         builder: (context, state) => const LabEntryScreen(),
+      ),
+      GoRoute(
+        path: Routes.devices,
+        builder: (context, state) => const DevicesScreen(),
+      ),
+      GoRoute(
+        path: Routes.bodyComposition,
+        builder: (context, state) => const BodyCompositionScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

@@ -74,4 +74,14 @@ class ApiEndpoints {
 
   /// Claim an invite (existing patient - authenticated)
   static String claimExistingInvite(String code) => '/auth/invite/$code/claim-existing';
+
+  // Device endpoints
+  static const String devices = '/patient/devices';
+  static const String withingsDevice = '/patient/devices/withings';
+  static const String withingsAuthorize = '/patient/devices/withings/authorize';
+  static const String withingsCallback = '/patient/devices/withings/callback';
+  static const String withingsSync = '/patient/devices/withings/sync';
+
+  // Body composition
+  static const String bodyComposition = '/patient/body-composition';
 }

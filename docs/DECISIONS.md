@@ -216,3 +216,54 @@ Consequence:
 - Clinicians can verify patient-entered labs
 - Future: OCR can populate drafts for manual verification
 - Future: Lab provider APIs can auto-import with source = IMPORTED
+
+## 2026-01 — Device integration with adapter pattern and mock-first development
+
+Context: Withings devices (BPM Pro2, Body Pro 2) need to be integrated for automatic measurement sync. Withings credentials not yet available for testing.
+
+Decision: Implement adapter pattern with mock and real implementations:
+- `WithingsAdapter` interface defines OAuth and sync operations
+- `MockWithingsAdapter` simulates OAuth flow and returns realistic test data
+- `RealWithingsAdapter` implements actual Withings API calls
+- Factory selects adapter based on `WITHINGS_MOCK` env var or missing credentials
+
+Design choices:
+- **OAuth token encryption**: AES-256-GCM for tokens at rest (ENCRYPTION_KEY env var)
+- **In-app browser for OAuth**: Uses `url_launcher` with `LaunchMode.inAppBrowserView`
+- **15-minute sync interval**: Background job polls all active connections
+- **Forward-only sync**: No historical data import; sync from connection time forward
+- **All body composition metrics**: Captures everything Body Pro 2 measures (9 types)
+- **CSRF protection**: State parameter with 15-minute cache for OAuth flow
+
+Consequence:
+- Full end-to-end testing possible without Withings credentials
+- Easy switch to real API when credentials available
+- Body composition data (fat %, muscle mass, etc.) enables future health insights
+- Alert rules automatically apply to device-synced measurements
+- Mock data simulates realistic BPM Pro2 and Body Pro 2 readings
+
+## 2026-01 — Withings measurement type mapping
+
+Context: Withings API returns measurement type codes that need mapping to Nephrawn's schema.
+
+Decision: Extend MeasurementType enum with body composition types and map Withings codes:
+| Withings Code | Nephrawn Type | Unit |
+|---------------|---------------|------|
+| 1 | WEIGHT | kg |
+| 5 | FAT_FREE_MASS | kg |
+| 6 | FAT_RATIO | % |
+| 8 | FAT_MASS | kg |
+| 9 | BP_DIASTOLIC | mmHg |
+| 10 | BP_SYSTOLIC | mmHg |
+| 11 | HEART_RATE | bpm |
+| 76 | MUSCLE_MASS | kg |
+| 77 | HYDRATION | kg |
+| 88 | BONE_MASS | kg |
+| 91 | PULSE_WAVE_VELOCITY | m/s |
+
+Value conversion: `value * 10^unit` (Withings sends value=7200, unit=-2 → 72.00 kg)
+
+Consequence:
+- Consistent storage in canonical units across manual and device data
+- Trend calculations work identically for device-synced measurements
+- Units.ts updated with clinical thresholds for new body composition types

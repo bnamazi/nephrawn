@@ -5,6 +5,7 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/models/blood_pressure.dart';
 import '../../core/widgets/app_bottom_nav.dart';
+import '../../core/widgets/source_badge.dart';
 import '../../routes/router.dart';
 import 'bp_chart.dart';
 import 'bp_list.dart';
@@ -240,9 +241,15 @@ class _BPHistoryItem extends StatelessWidget {
           ),
           child: Icon(Icons.favorite, color: categoryColor, size: 20),
         ),
-        title: Text(
-          '${reading.systolic}/${reading.diastolic} mmHg',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        title: Row(
+          children: [
+            Text(
+              '${reading.systolic}/${reading.diastolic} mmHg',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(width: 8),
+            SourceBadge(source: reading.source),
+          ],
         ),
         subtitle: Text(
           _formatDate(reading.timestamp),

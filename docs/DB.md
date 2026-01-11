@@ -198,19 +198,34 @@ The schema prioritizes:
 | id | UUID | Primary key |
 | patientId | UUID | FK → Patient |
 | timestamp | timestamp | When measured |
-| type | enum | weight, bp_systolic, bp_diastolic, spo2, heart_rate |
+| type | enum | See MeasurementType enum below |
 | value | decimal(10,2) | Numeric value in **canonical units** |
-| unit | string | Always canonical: kg, mmHg, %, bpm |
+| unit | string | Always canonical: kg, mmHg, %, bpm, m/s |
 | inputUnit | string | Nullable; original unit if conversion occurred (e.g., "lbs") |
 | source | string | 'manual', 'withings', future vendors |
 | externalId | string | Nullable; vendor's record ID for dedup |
 | createdAt | timestamp | |
 
+**MeasurementType Enum Values**:
+- WEIGHT — Body weight (kg)
+- BP_SYSTOLIC — Systolic blood pressure (mmHg)
+- BP_DIASTOLIC — Diastolic blood pressure (mmHg)
+- SPO2 — Blood oxygen saturation (%)
+- HEART_RATE — Heart rate (bpm)
+- FAT_FREE_MASS — Lean mass (kg) — from Withings Body Pro 2
+- FAT_RATIO — Body fat percentage (%) — from Withings Body Pro 2
+- FAT_MASS — Fat mass weight (kg) — from Withings Body Pro 2
+- MUSCLE_MASS — Muscle mass (kg) — from Withings Body Pro 2
+- HYDRATION — Body water (kg) — from Withings Body Pro 2
+- BONE_MASS — Bone mass (kg) — from Withings Body Pro 2
+- PULSE_WAVE_VELOCITY — Vascular age indicator (m/s) — from Withings Body Pro 2
+
 **Canonical Units**: All measurements are stored in canonical units for consistency:
-- WEIGHT → kg (lbs converted at ingestion)
+- WEIGHT, FAT_FREE_MASS, FAT_MASS, MUSCLE_MASS, HYDRATION, BONE_MASS → kg
 - BP_SYSTOLIC, BP_DIASTOLIC → mmHg
-- SPO2 → %
+- SPO2, FAT_RATIO → %
 - HEART_RATE → bpm
+- PULSE_WAVE_VELOCITY → m/s
 
 **Constraints**:
 - `@@unique([source, externalId])` — Prevents device duplicate imports
@@ -310,7 +325,8 @@ Patient ─────┬───── one PatientProfile
              ├───── many ClinicianNotes
              ├───── many PatientProfileAudits
              ├───── many Enrollments ───── Clinician + Clinic
-             └───── many Invites (claimed)
+             ├───── many Invites (claimed)
+             └───── many DeviceConnections
 
 Enrollment ──┬───── one CarePlan
              └───── many PatientProfileAudits (via entityId)
@@ -409,6 +425,43 @@ LabResult ──── one LabReport
 
 ---
 
+### DeviceConnection (Implemented)
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| patientId | UUID | FK → Patient |
+| vendor | enum | WITHINGS (extensible to future vendors) |
+| accessToken | string | Encrypted (AES-256-GCM) |
+| refreshToken | string | Encrypted (AES-256-GCM) |
+| tokenExpiresAt | timestamp | When access token expires |
+| scope | string | Nullable; OAuth scopes granted |
+| withingsUserId | string | Nullable; Vendor user ID for API calls |
+| status | enum | ACTIVE, EXPIRED, REVOKED, ERROR |
+| lastSyncAt | timestamp | Nullable; last successful sync |
+| lastSyncError | string | Nullable; error message from last sync |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+**Constraints**:
+- `@@unique([patientId, vendor])` — One connection per vendor per patient
+- `@@index([status, lastSyncAt])` — Background sync job queries
+
+**DeviceVendor Enum Values**: WITHINGS (future: FITBIT, APPLE_HEALTH, etc.)
+
+**DeviceConnectionStatus Enum Values**:
+- ACTIVE — Connection working, tokens valid
+- EXPIRED — Access token expired, needs re-auth
+- REVOKED — User disconnected device
+- ERROR — Persistent sync errors
+
+**Design Notes**:
+- OAuth tokens encrypted at rest using AES-256-GCM
+- Token refresh happens automatically before expiry (5-minute buffer)
+- Background job syncs every 15 minutes for active connections
+- Synced measurements stored with `source = 'withings'` and `externalId` for dedup
+
+---
+
 ## Extensibility Hooks (Schema Reserved, Not Implemented)
 
 ### Document (MVP+ Phase 1)
@@ -423,18 +476,6 @@ LabResult ──── one LabReport
 | documentType | enum | lab_result, imaging, other |
 | parsedData | JSONB | Nullable; structured extraction (Phase 2) |
 | status | enum | uploaded, processing, parsed, failed |
-
-### DeviceConnection (MVP+ Phase 1)
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Primary key |
-| patientId | UUID | FK → Patient |
-| vendor | enum | withings, (future vendors) |
-| accessToken | string | Encrypted |
-| refreshToken | string | Encrypted |
-| expiresAt | timestamp | |
-| status | enum | active, revoked, expired |
-| lastSyncAt | timestamp | Nullable |
 
 ### MedicationReminder (MVP+ Phase 1)
 | Field | Type | Notes |

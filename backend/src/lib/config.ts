@@ -1,4 +1,5 @@
 import "dotenv/config";
+import crypto from "crypto";
 
 const nodeEnv = process.env.NODE_ENV || "development";
 const isProduction = nodeEnv === "production";
@@ -44,6 +45,34 @@ function getCorsOrigins(): string[] {
   return origins.split(",").map((origin) => origin.trim());
 }
 
+function getEncryptionKey(): string {
+  const key = process.env.ENCRYPTION_KEY;
+
+  if (!key) {
+    if (isProduction) {
+      throw new Error(
+        "FATAL: ENCRYPTION_KEY environment variable is required in production"
+      );
+    }
+    // Generate a deterministic dev key for local development
+    console.warn(
+      "WARNING: ENCRYPTION_KEY not set. Using insecure default for development only."
+    );
+    return crypto.createHash("sha256").update("dev-encryption-key-DO-NOT-USE").digest("hex");
+  }
+
+  return key;
+}
+
+function getWithingsMock(): boolean {
+  const mock = process.env.WITHINGS_MOCK;
+  // Default to true if no credentials are provided
+  if (!mock) {
+    return !process.env.WITHINGS_CLIENT_ID || !process.env.WITHINGS_CLIENT_SECRET;
+  }
+  return mock === "true" || mock === "1";
+}
+
 export const config = {
   port: parseInt(process.env.PORT || "3000", 10),
   jwt: {
@@ -52,6 +81,18 @@ export const config = {
   },
   cors: {
     origins: getCorsOrigins(),
+  },
+  encryption: {
+    key: getEncryptionKey(),
+  },
+  withings: {
+    clientId: process.env.WITHINGS_CLIENT_ID || "",
+    clientSecret: process.env.WITHINGS_CLIENT_SECRET || "",
+    redirectUri:
+      process.env.WITHINGS_REDIRECT_URI ||
+      "http://localhost:3000/patient/devices/withings/callback",
+    scopes: "user.metrics", // Weight, BP, body composition
+    mock: getWithingsMock(),
   },
   nodeEnv,
   isProduction,

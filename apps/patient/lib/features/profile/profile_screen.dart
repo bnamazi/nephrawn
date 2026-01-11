@@ -166,6 +166,18 @@ class _ProfileScreenContent extends StatelessWidget {
                     onTap: () => context.push('/documents'),
                   ),
                 ),
+                const SizedBox(height: 8),
+
+                // Connected Devices link
+                Card(
+                  child: ListTile(
+                    leading: Icon(Icons.devices_outlined, color: Theme.of(context).primaryColor),
+                    title: const Text('Connected Devices'),
+                    subtitle: const Text('Manage Withings and other devices'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/devices'),
+                  ),
+                ),
                 const SizedBox(height: 32),
 
                 // Logout button

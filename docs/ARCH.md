@@ -180,24 +180,37 @@
 
 These features are in active development as part of prototype scope.
 
-### 1. Device Integration (Withings)
+### 1. Device Integration (Withings) — IMPLEMENTED
 
 **Schema additions:**
-- `DeviceConnection` — OAuth tokens and sync state per patient/vendor
-- `Measurement.source` — Already exists; will use `'withings'` value
+- `DeviceConnection` — OAuth tokens (encrypted) and sync state per patient/vendor
+- `MeasurementType` enum extended with body composition types (FAT_FREE_MASS, FAT_RATIO, FAT_MASS, MUSCLE_MASS, HYDRATION, BONE_MASS, PULSE_WAVE_VELOCITY)
+- `Measurement.source` — Uses `'withings'` value for device-synced data
 
 **Services:**
-- `DeviceService` — OAuth flow, token refresh, connection management
-- `WithingsAdapter` — Vendor-specific API client implementing adapter interface
+- `DeviceService` — OAuth flow, token refresh, connection management, sync orchestration
+- `WithingsAdapter` — Interface with mock and real implementations (factory pattern)
+- Mock adapter enabled when `WITHINGS_MOCK=true` or credentials missing
 
 **APIs:**
-- `POST /patient/devices/withings/authorize` — Initiate OAuth
-- `GET /patient/devices/withings/callback` — OAuth callback
-- `DELETE /patient/devices/withings` — Disconnect device
 - `GET /patient/devices` — List connected devices
+- `GET /patient/devices/withings` — Get Withings connection details
+- `POST /patient/devices/withings/authorize` — Initiate OAuth (returns auth URL)
+- `GET /patient/devices/withings/callback` — OAuth callback (exchanges code for tokens)
+- `DELETE /patient/devices/withings` — Disconnect device
+- `POST /patient/devices/withings/sync` — Manual sync trigger
 
 **Background jobs:**
-- `syncWithingsData` — Periodic sync of measurements from Withings API
+- `syncWithingsDevices` — Every 15 minutes, syncs all active connections
+
+**Supported devices:**
+- Withings BPM Pro2 — Blood pressure (systolic, diastolic, heart rate)
+- Withings Body Pro 2 — Weight + full body composition (fat %, muscle mass, bone mass, hydration, pulse wave velocity)
+
+**Flutter:**
+- `DevicesScreen` — Manage device connections
+- `DevicesProvider` — State management for device operations
+- In-app browser OAuth flow using `url_launcher`
 
 ### 2. Lab Result Uploads
 

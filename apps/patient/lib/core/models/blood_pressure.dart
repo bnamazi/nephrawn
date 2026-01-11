@@ -5,11 +5,13 @@ class BloodPressureReading {
   final DateTime timestamp;
   final int systolic;
   final int diastolic;
+  final String source;
 
   BloodPressureReading({
     required this.timestamp,
     required this.systolic,
     required this.diastolic,
+    this.source = 'manual',
   });
 
   factory BloodPressureReading.fromJson(Map<String, dynamic> json) {
@@ -17,6 +19,7 @@ class BloodPressureReading {
       timestamp: DateTime.parse(json['timestamp'] as String),
       systolic: (json['systolic'] as num).toInt(),
       diastolic: (json['diastolic'] as num).toInt(),
+      source: json['source'] as String? ?? 'manual',
     );
   }
 

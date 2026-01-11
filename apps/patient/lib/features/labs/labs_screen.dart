@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/models/lab_report.dart';
+import '../../core/widgets/app_bottom_nav.dart';
 import 'labs_provider.dart';
 
 class LabsScreen extends StatelessWidget {
@@ -78,6 +79,7 @@ class _LabsScreenContent extends StatelessWidget {
         icon: const Icon(Icons.add),
         label: const Text('Add Labs'),
       ),
+      bottomNavigationBar: const AppBottomNav(currentIndex: NavIndex.labs),
     );
   }
 

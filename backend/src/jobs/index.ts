@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { logger } from "../lib/logger.js";
 import { prisma } from "../lib/prisma.js";
 import { logAudit } from "../services/audit.service.js";
+import { getActiveConnectionsForSync, syncWithingsData } from "../services/device.service.js";
 
 /**
  * Background job to expire pending invites that have passed their expiration date.
@@ -58,6 +59,57 @@ async function expireOldInvites(): Promise<void> {
 }
 
 /**
+ * Background job to sync measurements from Withings devices.
+ * Runs every 15 minutes for all active device connections.
+ */
+async function syncWithingsDevices(): Promise<void> {
+  const jobLogger = logger.child({ job: "syncWithingsDevices" });
+
+  try {
+    const connections = await getActiveConnectionsForSync();
+
+    if (connections.length === 0) {
+      jobLogger.debug("No active Withings connections to sync");
+      return;
+    }
+
+    jobLogger.info({ connectionCount: connections.length }, "Starting Withings sync");
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const connection of connections) {
+      try {
+        const result = await syncWithingsData(connection.id);
+        jobLogger.debug(
+          {
+            connectionId: connection.id,
+            patientId: connection.patientId,
+            created: result.measurementsCreated,
+            skipped: result.measurementsSkipped,
+          },
+          "Synced Withings connection"
+        );
+        successCount++;
+      } catch (err) {
+        jobLogger.error(
+          { err, connectionId: connection.id, patientId: connection.patientId },
+          "Failed to sync Withings connection"
+        );
+        errorCount++;
+      }
+    }
+
+    jobLogger.info(
+      { total: connections.length, success: successCount, errors: errorCount },
+      "Withings sync completed"
+    );
+  } catch (error) {
+    jobLogger.error({ err: error }, "Failed to run Withings sync job");
+  }
+}
+
+/**
  * Start all background jobs
  */
 export function startBackgroundJobs(): void {
@@ -66,6 +118,11 @@ export function startBackgroundJobs(): void {
   // Expire old invites - runs daily at 2:00 AM
   cron.schedule("0 2 * * *", async () => {
     await expireOldInvites();
+  });
+
+  // Sync Withings devices - runs every 15 minutes
+  cron.schedule("*/15 * * * *", async () => {
+    await syncWithingsDevices();
   });
 
   // Also run once on startup to catch any missed expirations
@@ -86,4 +143,4 @@ export function stopBackgroundJobs(): void {
 }
 
 // Export for testing
-export { expireOldInvites };
+export { expireOldInvites, syncWithingsDevices };

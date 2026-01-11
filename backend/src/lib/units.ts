@@ -12,6 +12,14 @@ export const CANONICAL_UNITS: Record<MeasurementType, string> = {
   BP_DIASTOLIC: "mmHg",
   SPO2: "%",
   HEART_RATE: "bpm",
+  // Body composition (Withings Body Pro 2)
+  FAT_FREE_MASS: "kg",
+  FAT_RATIO: "%",
+  FAT_MASS: "kg",
+  MUSCLE_MASS: "kg",
+  HYDRATION: "kg",
+  BONE_MASS: "kg",
+  PULSE_WAVE_VELOCITY: "m/s",
 };
 
 // Display units (defaults for frontend)
@@ -21,6 +29,14 @@ export const DISPLAY_UNITS: Record<MeasurementType, string> = {
   BP_DIASTOLIC: "mmHg",
   SPO2: "%",
   HEART_RATE: "bpm",
+  // Body composition
+  FAT_FREE_MASS: "kg",
+  FAT_RATIO: "%",
+  FAT_MASS: "kg",
+  MUSCLE_MASS: "kg",
+  HYDRATION: "kg",
+  BONE_MASS: "kg",
+  PULSE_WAVE_VELOCITY: "m/s",
 };
 
 // Conversion factors TO canonical units
@@ -49,6 +65,29 @@ const CONVERSIONS: Record<string, Record<string, ConversionFn>> = {
     bpm: (v) => v,
     "beats/min": (v) => v,
   },
+  // Body composition (from Withings - already in canonical units)
+  FAT_FREE_MASS: {
+    kg: (v) => v,
+  },
+  FAT_RATIO: {
+    "%": (v) => v,
+    percent: (v) => v,
+  },
+  FAT_MASS: {
+    kg: (v) => v,
+  },
+  MUSCLE_MASS: {
+    kg: (v) => v,
+  },
+  HYDRATION: {
+    kg: (v) => v,
+  },
+  BONE_MASS: {
+    kg: (v) => v,
+  },
+  PULSE_WAVE_VELOCITY: {
+    "m/s": (v) => v,
+  },
 };
 
 // Conversion factors FROM canonical units (for display)
@@ -69,6 +108,28 @@ const DISPLAY_CONVERSIONS: Record<string, Record<string, ConversionFn>> = {
   },
   HEART_RATE: {
     bpm: (v) => v,
+  },
+  // Body composition (no conversion needed)
+  FAT_FREE_MASS: {
+    kg: (v) => v,
+  },
+  FAT_RATIO: {
+    "%": (v) => v,
+  },
+  FAT_MASS: {
+    kg: (v) => v,
+  },
+  MUSCLE_MASS: {
+    kg: (v) => v,
+  },
+  HYDRATION: {
+    kg: (v) => v,
+  },
+  BONE_MASS: {
+    kg: (v) => v,
+  },
+  PULSE_WAVE_VELOCITY: {
+    "m/s": (v) => v,
   },
 };
 
@@ -156,6 +217,14 @@ export const TREND_THRESHOLDS: Record<MeasurementType, { significant: number; un
   BP_DIASTOLIC: { significant: 5, unit: "mmHg" }, // 5 mmHg change is significant
   SPO2: { significant: 2, unit: "%" }, // 2% change is significant
   HEART_RATE: { significant: 10, unit: "bpm" }, // 10 bpm change is significant
+  // Body composition - trends typically tracked over longer periods
+  FAT_FREE_MASS: { significant: 1.0, unit: "kg" },
+  FAT_RATIO: { significant: 2, unit: "%" }, // 2% change is notable
+  FAT_MASS: { significant: 1.0, unit: "kg" },
+  MUSCLE_MASS: { significant: 0.5, unit: "kg" },
+  HYDRATION: { significant: 1.0, unit: "kg" },
+  BONE_MASS: { significant: 0.2, unit: "kg" },
+  PULSE_WAVE_VELOCITY: { significant: 0.5, unit: "m/s" }, // Vascular age indicator
 };
 
 /**
