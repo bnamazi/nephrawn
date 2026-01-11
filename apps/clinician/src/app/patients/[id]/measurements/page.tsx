@@ -12,11 +12,23 @@ import {
 import MeasurementChart, { BloodPressureChart } from '@/components/MeasurementChart';
 import Button from '@/components/ui/Button';
 
-const METRICS: { value: MetricType; label: string }[] = [
+// Core vitals
+const CORE_METRICS: { value: string; label: string }[] = [
   { value: 'WEIGHT', label: 'Weight' },
   { value: 'blood-pressure', label: 'Blood Pressure' },
   { value: 'SPO2', label: 'SpO2' },
   { value: 'HEART_RATE', label: 'Heart Rate' },
+];
+
+// Body composition metrics (from smart scale)
+const BODY_COMP_METRICS: { value: string; label: string }[] = [
+  { value: 'FAT_RATIO', label: 'Body Fat %' },
+  { value: 'MUSCLE_MASS', label: 'Muscle Mass' },
+  { value: 'FAT_MASS', label: 'Fat Mass' },
+  { value: 'FAT_FREE_MASS', label: 'Lean Mass' },
+  { value: 'HYDRATION', label: 'Hydration' },
+  { value: 'BONE_MASS', label: 'Bone Mass' },
+  { value: 'PULSE_WAVE_VELOCITY', label: 'Pulse Wave Velocity' },
 ];
 
 const DATE_RANGES = [
@@ -25,18 +37,32 @@ const DATE_RANGES = [
   { value: '90', label: '90 Days' },
 ];
 
-const METRIC_COLORS: Record<MetricType, string> = {
+const METRIC_COLORS: Record<string, string> = {
   'WEIGHT': '#3B82F6',
   'blood-pressure': '#EF4444',
   'SPO2': '#8B5CF6',
   'HEART_RATE': '#F97316',
+  'FAT_RATIO': '#10B981',
+  'MUSCLE_MASS': '#6366F1',
+  'FAT_MASS': '#F59E0B',
+  'FAT_FREE_MASS': '#14B8A6',
+  'HYDRATION': '#06B6D4',
+  'BONE_MASS': '#8B5CF6',
+  'PULSE_WAVE_VELOCITY': '#EC4899',
 };
 
-const METRIC_UNITS: Record<MetricType, string> = {
+const METRIC_UNITS: Record<string, string> = {
   'WEIGHT': 'lbs',
   'blood-pressure': 'mmHg',
   'SPO2': '%',
   'HEART_RATE': 'bpm',
+  'FAT_RATIO': '%',
+  'MUSCLE_MASS': 'kg',
+  'FAT_MASS': 'kg',
+  'FAT_FREE_MASS': 'kg',
+  'HYDRATION': 'kg',
+  'BONE_MASS': 'kg',
+  'PULSE_WAVE_VELOCITY': 'm/s',
 };
 
 export default function MeasurementsPage() {
@@ -46,8 +72,8 @@ export default function MeasurementsPage() {
   const { isAuthenticated } = useAuth();
   const patientId = params.id as string;
 
-  const initialMetric = (searchParams.get('metric') as MetricType) || 'WEIGHT';
-  const [selectedMetric, setSelectedMetric] = useState<MetricType>(initialMetric);
+  const initialMetric = searchParams.get('metric') || 'WEIGHT';
+  const [selectedMetric, setSelectedMetric] = useState<string>(initialMetric);
   const [dateRange, setDateRange] = useState('30');
   const [chartData, setChartData] = useState<ChartResponse | BloodPressureChartResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -91,33 +117,56 @@ export default function MeasurementsPage() {
   return (
     <div>
       {/* Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        {/* Metric selector */}
-        <div className="flex gap-2">
-          {METRICS.map((metric) => (
-            <Button
-              key={metric.value}
-              variant={selectedMetric === metric.value ? 'primary' : 'outline'}
-              size="sm"
-              onClick={() => setSelectedMetric(metric.value)}
-            >
-              {metric.label}
-            </Button>
-          ))}
+      <div className="space-y-4 mb-6">
+        {/* Core Vitals */}
+        <div>
+          <p className="text-xs font-medium text-gray-500 uppercase mb-2">Vitals</p>
+          <div className="flex flex-wrap gap-2">
+            {CORE_METRICS.map((metric) => (
+              <Button
+                key={metric.value}
+                variant={selectedMetric === metric.value ? 'primary' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedMetric(metric.value)}
+              >
+                {metric.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Body Composition */}
+        <div>
+          <p className="text-xs font-medium text-gray-500 uppercase mb-2">Body Composition</p>
+          <div className="flex flex-wrap gap-2">
+            {BODY_COMP_METRICS.map((metric) => (
+              <Button
+                key={metric.value}
+                variant={selectedMetric === metric.value ? 'primary' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedMetric(metric.value)}
+              >
+                {metric.label}
+              </Button>
+            ))}
+          </div>
         </div>
 
         {/* Date range selector */}
-        <div className="flex gap-2">
-          {DATE_RANGES.map((range) => (
-            <Button
-              key={range.value}
-              variant={dateRange === range.value ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setDateRange(range.value)}
-            >
-              {range.label}
-            </Button>
-          ))}
+        <div className="flex items-center gap-4">
+          <p className="text-xs font-medium text-gray-500 uppercase">Time Range</p>
+          <div className="flex gap-2">
+            {DATE_RANGES.map((range) => (
+              <Button
+                key={range.value}
+                variant={dateRange === range.value ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setDateRange(range.value)}
+              >
+                {range.label}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -178,9 +227,9 @@ export default function MeasurementsPage() {
       ) : (
         <MeasurementChart
           data={(chartData as ChartResponse)?.data?.points || []}
-          unit={METRIC_UNITS[selectedMetric]}
-          color={METRIC_COLORS[selectedMetric]}
-          title={`${METRICS.find((m) => m.value === selectedMetric)?.label} Over Time`}
+          unit={METRIC_UNITS[selectedMetric] || ''}
+          color={METRIC_COLORS[selectedMetric] || '#3B82F6'}
+          title={`${[...CORE_METRICS, ...BODY_COMP_METRICS].find((m) => m.value === selectedMetric)?.label || selectedMetric} Over Time`}
         />
       )}
 
@@ -204,7 +253,7 @@ export default function MeasurementsPage() {
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <p className="text-sm text-gray-500">Metric</p>
             <p className="text-xl font-semibold text-gray-900">
-              {METRICS.find((m) => m.value === selectedMetric)?.label}
+              {[...CORE_METRICS, ...BODY_COMP_METRICS].find((m) => m.value === selectedMetric)?.label}
             </p>
           </div>
         </div>

@@ -1,8 +1,24 @@
 'use client';
 
 import Card from './ui/Card';
-import { MeasurementSummary } from '@/lib/types';
+import { MeasurementSummary, getSourceLabel } from '@/lib/types';
 import { formatRelativeTime } from '@/lib/utils';
+
+function SourceBadge({ source }: { source: string }) {
+  const isDevice = source.toLowerCase() !== 'manual';
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
+      isDevice ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+    }`}>
+      {isDevice && (
+        <svg className="w-3 h-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )}
+      {getSourceLabel(source)}
+    </span>
+  );
+}
 
 interface MetricCardProps {
   title: string;
@@ -84,9 +100,12 @@ export default function MetricCard({
           {hasData && <span className="ml-1 text-sm text-gray-500">{displayUnit}</span>}
         </div>
         {hasData && summary?.latest && (
-          <p className="text-xs text-gray-400 mt-1">
-            {formatRelativeTime(summary.latest.timestamp)}
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs text-gray-400">
+              {formatRelativeTime(summary.latest.timestamp)}
+            </p>
+            <SourceBadge source={summary.latest.source} />
+          </div>
         )}
         {!hasData && (
           <p className="text-xs text-gray-400 mt-1">No data</p>
@@ -135,9 +154,12 @@ export function BloodPressureCard({ systolic, diastolic, onClick }: BloodPressur
           {hasData && <span className="ml-1 text-sm text-gray-500">mmHg</span>}
         </div>
         {hasData && systolic?.latest && (
-          <p className="text-xs text-gray-400 mt-1">
-            {formatRelativeTime(systolic.latest.timestamp)}
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs text-gray-400">
+              {formatRelativeTime(systolic.latest.timestamp)}
+            </p>
+            <SourceBadge source={systolic.latest.source} />
+          </div>
         )}
         {!hasData && (
           <p className="text-xs text-gray-400 mt-1">No data</p>

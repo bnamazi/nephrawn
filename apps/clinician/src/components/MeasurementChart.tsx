@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { ChartPoint, BloodPressureChartPoint } from '@/lib/types';
+import { ChartPoint, BloodPressureChartPoint, getSourceLabel } from '@/lib/types';
 
 interface MeasurementChartProps {
   data: ChartPoint[];
@@ -73,23 +73,27 @@ export default function MeasurementChart({
             unit={` ${unit}`}
           />
           <Tooltip
-            formatter={(value) => {
-              if (typeof value === 'number') {
-                return [`${value.toFixed(1)} ${unit}`, 'Value'];
+            content={({ active, payload }) => {
+              if (active && payload && payload[0]) {
+                const point = payload[0].payload as ChartPoint & { date: string };
+                const isDevice = point.source?.toLowerCase() !== 'manual';
+                return (
+                  <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+                    <p className="text-sm font-medium text-gray-900">
+                      {formatDateTime(point.timestamp)}
+                    </p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {typeof payload[0].value === 'number'
+                        ? `${payload[0].value.toFixed(1)} ${unit}`
+                        : payload[0].value}
+                    </p>
+                    <p className={`text-xs mt-1 ${isDevice ? 'text-blue-600' : 'text-gray-500'}`}>
+                      {getSourceLabel(point.source)}
+                    </p>
+                  </div>
+                );
               }
-              return [String(value), 'Value'];
-            }}
-            labelFormatter={(label, payload) => {
-              if (payload && payload[0]) {
-                return formatDateTime(payload[0].payload.timestamp);
-              }
-              return String(label);
-            }}
-            contentStyle={{
-              backgroundColor: 'white',
-              border: '1px solid #E5E7EB',
-              borderRadius: '8px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              return null;
             }}
           />
           <Line
@@ -146,24 +150,32 @@ export function BloodPressureChart({ data, title }: BloodPressureChartProps) {
             unit=" mmHg"
           />
           <Tooltip
-            formatter={(value, name) => {
-              const val = typeof value === 'number' ? Math.round(value) : value;
-              return [
-                `${val} mmHg`,
-                name === 'systolic' ? 'Systolic' : 'Diastolic',
-              ];
-            }}
-            labelFormatter={(label, payload) => {
-              if (payload && payload[0]) {
-                return formatDateTime(payload[0].payload.timestamp);
+            content={({ active, payload }) => {
+              if (active && payload && payload.length >= 2) {
+                const point = payload[0].payload as BloodPressureChartPoint & { date: string };
+                const isDevice = point.source?.toLowerCase() !== 'manual';
+                return (
+                  <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
+                    <p className="text-sm font-medium text-gray-900">
+                      {formatDateTime(point.timestamp)}
+                    </p>
+                    <div className="mt-1 space-y-0.5">
+                      <p className="text-sm">
+                        <span className="text-red-600">Systolic:</span>{' '}
+                        <span className="font-medium">{Math.round(point.systolic)} mmHg</span>
+                      </p>
+                      <p className="text-sm">
+                        <span className="text-blue-600">Diastolic:</span>{' '}
+                        <span className="font-medium">{Math.round(point.diastolic)} mmHg</span>
+                      </p>
+                    </div>
+                    <p className={`text-xs mt-1 ${isDevice ? 'text-blue-600' : 'text-gray-500'}`}>
+                      {getSourceLabel(point.source)}
+                    </p>
+                  </div>
+                );
               }
-              return String(label);
-            }}
-            contentStyle={{
-              backgroundColor: 'white',
-              border: '1px solid #E5E7EB',
-              borderRadius: '8px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              return null;
             }}
           />
           <Legend />

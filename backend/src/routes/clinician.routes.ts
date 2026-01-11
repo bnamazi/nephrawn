@@ -67,6 +67,7 @@ import {
   labResultSchema,
   labResultUpdateSchema,
 } from "../lib/validation.js";
+import { getDeviceConnections } from "../services/device.service.js";
 
 const router = Router();
 
@@ -566,6 +567,63 @@ router.get("/patients/:patientId/summary", async (req: Request, res: Response) =
   } catch (error) {
     logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch patient summary");
     res.status(500).json({ error: "Failed to fetch patient summary" });
+  }
+});
+
+// GET /clinician/patients/:patientId/devices - Get patient's connected devices
+router.get("/patients/:patientId/devices", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    // Verify clinician has access to this patient
+    const enrollment = await prisma.enrollment.findFirst({
+      where: { patientId, clinicianId, status: "ACTIVE" },
+    });
+
+    if (!enrollment) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    const devices = await getDeviceConnections(patientId);
+
+    // Get last measurement per device type for additional context
+    const deviceTypes = await Promise.all([
+      prisma.measurement.findFirst({
+        where: { patientId, type: { in: ["BP_SYSTOLIC", "BP_DIASTOLIC"] }, source: { not: "manual" } },
+        orderBy: { timestamp: "desc" },
+        select: { timestamp: true, source: true },
+      }),
+      prisma.measurement.findFirst({
+        where: { patientId, type: "WEIGHT", source: { not: "manual" } },
+        orderBy: { timestamp: "desc" },
+        select: { timestamp: true, source: true },
+      }),
+    ]);
+
+    res.json({
+      devices,
+      deviceTypes: [
+        {
+          id: "blood_pressure_monitor",
+          name: "Blood Pressure Monitor",
+          connected: devices.some(d => d.status === "ACTIVE") && deviceTypes[0] !== null,
+          source: deviceTypes[0]?.source ?? null,
+          lastSync: deviceTypes[0]?.timestamp?.toISOString() ?? null,
+        },
+        {
+          id: "smart_scale",
+          name: "Smart Scale",
+          connected: devices.some(d => d.status === "ACTIVE") && deviceTypes[1] !== null,
+          source: deviceTypes[1]?.source ?? null,
+          lastSync: deviceTypes[1]?.timestamp?.toISOString() ?? null,
+        },
+      ],
+    });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch patient devices");
+    res.status(500).json({ error: "Failed to fetch patient devices" });
   }
 });
 
@@ -1221,7 +1279,12 @@ router.get("/patients/:patientId/charts/:type", async (req: Request, res: Respon
     }
 
     // Validate measurement type
-    const validTypes: MeasurementType[] = ["WEIGHT", "BP_SYSTOLIC", "BP_DIASTOLIC", "SPO2", "HEART_RATE"];
+    const validTypes: MeasurementType[] = [
+      "WEIGHT", "BP_SYSTOLIC", "BP_DIASTOLIC", "SPO2", "HEART_RATE",
+      // Body composition types
+      "FAT_FREE_MASS", "FAT_RATIO", "FAT_MASS", "MUSCLE_MASS",
+      "HYDRATION", "BONE_MASS", "PULSE_WAVE_VELOCITY"
+    ];
     if (!validTypes.includes(type as MeasurementType)) {
       res.status(400).json({ error: `Invalid type. Valid types: ${validTypes.join(", ")}, blood-pressure` });
       return;
@@ -1267,7 +1330,12 @@ router.get("/patients/:patientId/summary/:type", async (req: Request, res: Respo
       return;
     }
 
-    const validTypes: MeasurementType[] = ["WEIGHT", "BP_SYSTOLIC", "BP_DIASTOLIC", "SPO2", "HEART_RATE"];
+    const validTypes: MeasurementType[] = [
+      "WEIGHT", "BP_SYSTOLIC", "BP_DIASTOLIC", "SPO2", "HEART_RATE",
+      // Body composition types
+      "FAT_FREE_MASS", "FAT_RATIO", "FAT_MASS", "MUSCLE_MASS",
+      "HYDRATION", "BONE_MASS", "PULSE_WAVE_VELOCITY"
+    ];
     if (!validTypes.includes(type as MeasurementType)) {
       res.status(400).json({ error: `Invalid type. Valid types: ${validTypes.join(", ")}` });
       return;

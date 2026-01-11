@@ -39,7 +39,7 @@ export interface MeasurementSummary {
   type: string;
   unit: string;
   displayUnit: string;
-  latest: { value: number; timestamp: string } | null;
+  latest: { value: number; timestamp: string; source: string } | null;
   stats: { min: number; max: number; avg: number; count: number } | null;
   trend: 'increasing' | 'decreasing' | 'stable' | 'insufficient_data';
 }
@@ -63,12 +63,14 @@ export interface DashboardResponse {
 export interface ChartPoint {
   timestamp: string;
   value: number;
+  source: string;
 }
 
 export interface BloodPressureChartPoint {
   timestamp: string;
   systolic: number;
   diastolic: number;
+  source: string;
 }
 
 export interface ChartData {
@@ -101,6 +103,42 @@ export interface ChartResponse {
 export interface BloodPressureChartResponse {
   data: BloodPressureChartData | null;
   message?: string;
+}
+
+// Device types
+export type DeviceVendor = 'WITHINGS';
+export type DeviceStatus = 'ACTIVE' | 'EXPIRED' | 'REVOKED' | 'ERROR';
+
+export interface DeviceConnection {
+  id: string;
+  vendor: DeviceVendor;
+  status: DeviceStatus;
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
+  createdAt: string;
+}
+
+export interface DeviceTypeInfo {
+  id: string;
+  name: string;
+  connected: boolean;
+  source: string | null;
+  lastSync: string | null;
+}
+
+export interface PatientDevicesResponse {
+  devices: DeviceConnection[];
+  deviceTypes: DeviceTypeInfo[];
+}
+
+// Source display helpers
+export const SOURCE_LABELS: Record<string, string> = {
+  'manual': 'Manual',
+  'withings': 'Withings',
+};
+
+export function getSourceLabel(source: string): string {
+  return SOURCE_LABELS[source.toLowerCase()] || source;
 }
 
 // Metric types for display

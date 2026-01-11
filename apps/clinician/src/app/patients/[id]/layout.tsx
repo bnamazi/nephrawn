@@ -21,6 +21,7 @@ const TABS = [
   { label: 'Documents', href: '/documents' },
   { label: 'Profile', href: '/profile' },
   { label: 'Care Plan', href: '/care-plan' },
+  { label: 'Devices', href: '/devices' },
   { label: 'Notes', href: '/notes' },
 ];
 

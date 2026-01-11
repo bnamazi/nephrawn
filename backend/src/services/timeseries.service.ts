@@ -25,6 +25,7 @@ function clampLimit(limit: number | undefined): number {
 export type TimeSeriesPoint = {
   timestamp: string;
   value: number;
+  source: string;
 };
 
 export type DailyAggregate = {
@@ -109,6 +110,7 @@ export async function getTimeSeriesData(
       timestamp: true,
       value: true,
       unit: true,
+      source: true,
     },
   });
 
@@ -125,6 +127,7 @@ export async function getTimeSeriesData(
     points: measurements.map((m) => ({
       timestamp: m.timestamp.toISOString(),
       value: fromCanonical(type, m.value.toNumber(), displayUnit),
+      source: m.source,
     })),
     range: {
       from: from.toISOString(),
@@ -234,6 +237,7 @@ export type BloodPressurePoint = {
   timestamp: string;
   systolic: number;
   diastolic: number;
+  source: string;
 };
 
 export type BloodPressureResponse = {
@@ -276,7 +280,7 @@ export async function getBloodPressureTimeSeries(
       },
       orderBy: { timestamp: "asc" },
       take: HARD_MAX_LIMIT,
-      select: { timestamp: true, value: true, unit: true },
+      select: { timestamp: true, value: true, unit: true, source: true },
     }),
     prisma.measurement.findMany({
       where: {
@@ -286,7 +290,7 @@ export async function getBloodPressureTimeSeries(
       },
       orderBy: { timestamp: "asc" },
       take: HARD_MAX_LIMIT,
-      select: { timestamp: true, value: true },
+      select: { timestamp: true, value: true, source: true },
     }),
   ]);
 
@@ -295,10 +299,11 @@ export async function getBloodPressureTimeSeries(
   }
 
   // Create a map of diastolic readings by timestamp (with window tolerance)
-  const diastolicByTime: Array<{ time: number; value: number; used: boolean }> =
+  const diastolicByTime: Array<{ time: number; value: number; source: string; used: boolean }> =
     diastolicData.map(d => ({
       time: d.timestamp.getTime(),
       value: d.value.toNumber(),
+      source: d.source,
       used: false,
     }));
 
@@ -327,6 +332,7 @@ export async function getBloodPressureTimeSeries(
         timestamp: s.timestamp.toISOString(),
         systolic: s.value.toNumber(),
         diastolic: bestMatch.value,
+        source: s.source, // Use systolic source (should match diastolic for paired readings)
       });
       bestMatch.used = true;
       usedSystolic.add(sTime);
@@ -379,6 +385,7 @@ export type MeasurementSummary = {
   latest: {
     value: number;
     timestamp: string;
+    source: string;
   } | null;
   stats: {
     min: number;
@@ -420,7 +427,7 @@ export async function getMeasurementSummary(
     },
     orderBy: { timestamp: "desc" },
     take: HARD_MAX_LIMIT,
-    select: { timestamp: true, value: true, unit: true },
+    select: { timestamp: true, value: true, unit: true, source: true },
   });
 
   if (measurements.length === 0) {
@@ -487,6 +494,7 @@ export async function getMeasurementSummary(
     latest: {
       value: values[0],
       timestamp: measurements[0].timestamp.toISOString(),
+      source: measurements[0].source,
     },
     stats: {
       min: Number(Math.min(...values).toFixed(2)),
