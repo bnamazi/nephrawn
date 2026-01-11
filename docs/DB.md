@@ -1,16 +1,17 @@
 # Nephrawn — Domain Model
 
-## Core Concepts
+## Overview
 
-Nephrawn models relationships over time between patients, clinicians, and observations.
+Nephrawn models relationships over time between patients, clinicians, and clinical observations.
 The schema prioritizes:
 - Auditability (who did what, when)
 - Extensibility (JSONB for evolving structures)
 - RPM/CCM compliance (interaction logging)
+- Multi-clinic support (clinic as organizational boundary)
 
 ---
 
-## MVP Entities
+## 1. Identity & Access
 
 ### Patient
 | Field | Type | Notes |
@@ -19,7 +20,7 @@ The schema prioritizes:
 | email | string | Unique, used for auth |
 | passwordHash | string | bcrypt |
 | name | string | Display name |
-| dateOfBirth | date | For clinical context |
+| dateOfBirth | date | For clinical context and invite verification |
 | preferences | JSONB | Timezone, notification settings |
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
@@ -31,7 +32,7 @@ The schema prioritizes:
 | email | string | Unique, used for auth |
 | passwordHash | string | bcrypt |
 | name | string | Display name |
-| role | enum | clinician, admin |
+| role | enum | CLINICIAN, ADMIN |
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
 
@@ -42,9 +43,15 @@ The schema prioritizes:
 | name | string | Organization name |
 | slug | string | Unique URL-safe identifier |
 | npi | string | Nullable; National Provider Identifier |
+| taxId | string | Nullable; EIN for billing |
 | address | JSONB | Nullable; structured address |
 | phone | string | Nullable |
-| status | enum | active, suspended |
+| fax | string | Nullable |
+| email | string | Nullable; clinic contact email |
+| website | string | Nullable |
+| timezone | string | Default: "America/New_York" |
+| settings | JSONB | Nullable; additional configurable settings |
+| status | enum | ACTIVE, SUSPENDED |
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
 
@@ -56,8 +63,8 @@ The schema prioritizes:
 | id | UUID | Primary key |
 | clinicId | UUID | FK → Clinic |
 | clinicianId | UUID | FK → Clinician |
-| role | enum | owner, admin, clinician, staff |
-| status | enum | active, inactive |
+| role | enum | OWNER, ADMIN, CLINICIAN, STAFF |
+| status | enum | ACTIVE, INACTIVE |
 | joinedAt | timestamp | |
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
@@ -68,13 +75,13 @@ The schema prioritizes:
 | Field | Type | Notes |
 |-------|------|-------|
 | id | UUID | Primary key |
-| code | string(40) | Cryptographic random code |
+| code | string(40) | Cryptographic random code (~10^48 keyspace) |
 | clinicId | UUID | FK → Clinic |
 | createdById | UUID | FK → Clinician |
 | patientName | string | Expected patient name |
 | patientDob | date | For identity verification |
 | patientEmail | string | Nullable; for notification |
-| status | enum | pending, claimed, expired, revoked |
+| status | enum | PENDING, CLAIMED, EXPIRED, REVOKED |
 | expiresAt | timestamp | Default: 7 days |
 | claimedById | UUID | Nullable; FK → Patient who claimed |
 | claimedAt | timestamp | Nullable |
@@ -83,6 +90,10 @@ The schema prioritizes:
 
 **Constraints**: Unique (code), Index (status, expiresAt) for cleanup jobs
 
+---
+
+## 2. Clinical Data — Enrollment & Profiles
+
 ### Enrollment
 | Field | Type | Notes |
 |-------|------|-------|
@@ -90,9 +101,9 @@ The schema prioritizes:
 | patientId | UUID | FK → Patient |
 | clinicianId | UUID | FK → Clinician |
 | clinicId | UUID | FK → Clinic (organization boundary) |
-| status | enum | active, paused, discharged |
+| status | enum | ACTIVE, PAUSED, DISCHARGED |
 | isPrimary | boolean | Supports multi-clinician (default true) |
-| enrolledVia | enum | invite, migration, admin |
+| enrolledVia | enum | INVITE, MIGRATION, ADMIN |
 | inviteId | UUID | Nullable; FK → Invite if enrolled via invite |
 | enrolledAt | timestamp | When relationship started |
 | dischargedAt | timestamp | Nullable |
@@ -105,23 +116,23 @@ The schema prioritizes:
 | Field | Type | Notes |
 |-------|------|-------|
 | id | UUID | Primary key |
-| patientId | UUID | FK → Patient (unique) |
-| sex | enum | male, female, other, unspecified |
+| patientId | UUID | FK → Patient (unique, 1:1) |
+| sex | enum | MALE, FEMALE, OTHER, UNKNOWN |
 | heightCm | decimal(5,1) | Height in centimeters |
 | ckdStageSelfReported | enum | Patient-reported CKD stage |
 | ckdStageClinician | enum | Clinician-verified CKD stage (authoritative) |
 | ckdStageSetById | UUID | FK → Clinician who set clinician stage |
 | ckdStageSetAt | timestamp | When clinician stage was set |
-| primaryEtiology | enum | diabetes, hypertension, polycystic, etc. |
-| dialysisStatus | enum | none, hemodialysis, peritoneal_dialysis |
+| primaryEtiology | enum | DIABETES, HYPERTENSION, GLOMERULONEPHRITIS, POLYCYSTIC, OBSTRUCTIVE, OTHER, UNKNOWN |
+| dialysisStatus | enum | NONE, HEMODIALYSIS, PERITONEAL_DIALYSIS |
 | dialysisStartDate | date | Nullable |
-| transplantStatus | enum | none, listed, received |
+| transplantStatus | enum | NONE, PRIOR, CURRENT |
 | transplantDate | date | Nullable |
 | hasHeartFailure | boolean | |
-| heartFailureClass | enum | NYHA class (I-IV) |
-| diabetesType | enum | none, type_1, type_2 |
+| heartFailureClass | enum | NYHA CLASS_1, CLASS_2, CLASS_3, CLASS_4 |
+| diabetesType | enum | NONE, TYPE_1, TYPE_2 |
 | hasHypertension | boolean | |
-| otherConditions | string[] | Free-text array |
+| otherConditions | JSONB | string[] |
 | onDiuretics | boolean | Medication flag |
 | onAceArbInhibitor | boolean | Medication flag |
 | onSglt2Inhibitor | boolean | Medication flag |
@@ -132,8 +143,6 @@ The schema prioritizes:
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
 
-**Constraints**: Unique (patientId)
-
 **CKD Stage Enum Values**: STAGE_1, STAGE_2, STAGE_3A, STAGE_3B, STAGE_4, STAGE_5, STAGE_5D, TRANSPLANT, UNKNOWN
 
 **Design Note**: Dual CKD stage tracking (self-reported + clinician) enables safety comparison. Alerts use `ckdStageClinician ?? ckdStageSelfReported` for "effective" stage.
@@ -142,7 +151,7 @@ The schema prioritizes:
 | Field | Type | Notes |
 |-------|------|-------|
 | id | UUID | Primary key |
-| enrollmentId | UUID | FK → Enrollment (unique) |
+| enrollmentId | UUID | FK → Enrollment (unique, 1:1) |
 | dryWeightKg | decimal(5,2) | Target dry weight in kg |
 | targetBpSystolic | JSONB | `{ min: number, max: number }` |
 | targetBpDiastolic | JSONB | `{ min: number, max: number }` |
@@ -152,8 +161,6 @@ The schema prioritizes:
 | notes | text | Clinician notes |
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
-
-**Constraints**: Unique (enrollmentId)
 
 **Design Note**: CarePlan is per-enrollment, allowing different targets across clinics. This supports multi-clinic patients with different care protocols.
 
@@ -166,12 +173,16 @@ The schema prioritizes:
 | entityId | UUID | ID of the modified entity |
 | actorType | enum | PATIENT, CLINICIAN, SYSTEM |
 | actorId | UUID | Who made the change |
-| actorName | string | Display name at time of change |
+| actorName | string | Display name at time of change (denormalized) |
 | changedFields | JSONB | `{ field: { old: value, new: value } }` |
 | reason | text | Nullable; optional explanation |
 | timestamp | timestamp | |
 
 **Design Note**: Comprehensive audit trail for clinical data changes. Stores diff of changed fields for explainability.
+
+---
+
+## 3. Clinical Data — Observations
 
 ### SymptomCheckin
 | Field | Type | Notes |
@@ -198,7 +209,7 @@ The schema prioritizes:
 | id | UUID | Primary key |
 | patientId | UUID | FK → Patient |
 | timestamp | timestamp | When measured |
-| type | enum | See MeasurementType enum below |
+| type | enum | See MeasurementType below |
 | value | decimal(10,2) | Numeric value in **canonical units** |
 | unit | string | Always canonical: kg, mmHg, %, bpm, m/s |
 | inputUnit | string | Nullable; original unit if conversion occurred (e.g., "lbs") |
@@ -207,147 +218,31 @@ The schema prioritizes:
 | createdAt | timestamp | |
 
 **MeasurementType Enum Values**:
-- WEIGHT — Body weight (kg)
-- BP_SYSTOLIC — Systolic blood pressure (mmHg)
-- BP_DIASTOLIC — Diastolic blood pressure (mmHg)
-- SPO2 — Blood oxygen saturation (%)
-- HEART_RATE — Heart rate (bpm)
-- FAT_FREE_MASS — Lean mass (kg) — from Withings Body Pro 2
-- FAT_RATIO — Body fat percentage (%) — from Withings Body Pro 2
-- FAT_MASS — Fat mass weight (kg) — from Withings Body Pro 2
-- MUSCLE_MASS — Muscle mass (kg) — from Withings Body Pro 2
-- HYDRATION — Body water (kg) — from Withings Body Pro 2
-- BONE_MASS — Bone mass (kg) — from Withings Body Pro 2
-- PULSE_WAVE_VELOCITY — Vascular age indicator (m/s) — from Withings Body Pro 2
 
-**Canonical Units**: All measurements are stored in canonical units for consistency:
-- WEIGHT, FAT_FREE_MASS, FAT_MASS, MUSCLE_MASS, HYDRATION, BONE_MASS → kg
-- BP_SYSTOLIC, BP_DIASTOLIC → mmHg
-- SPO2, FAT_RATIO → %
-- HEART_RATE → bpm
-- PULSE_WAVE_VELOCITY → m/s
+| Type | Unit | Description | Patient Entry | Alerts |
+|------|------|-------------|---------------|--------|
+| WEIGHT | kg | Body weight | ✅ | ✅ |
+| BP_SYSTOLIC | mmHg | Systolic blood pressure | ✅ | ✅ |
+| BP_DIASTOLIC | mmHg | Diastolic blood pressure | ✅ | ✅ |
+| SPO2 | % | Blood oxygen saturation | Backend only* | ✅ |
+| HEART_RATE | bpm | Heart rate | Backend only* | ❌ |
+| FAT_FREE_MASS | kg | Lean mass (Withings Body Pro 2) | ❌ Device only | ❌ Trend only |
+| FAT_RATIO | % | Body fat percentage | ❌ Device only | ❌ Trend only |
+| FAT_MASS | kg | Fat mass weight | ❌ Device only | ❌ Trend only |
+| MUSCLE_MASS | kg | Muscle mass | ❌ Device only | ❌ Trend only |
+| HYDRATION | kg | Body water | ❌ Device only | ❌ Trend only |
+| BONE_MASS | kg | Bone mass | ❌ Device only | ❌ Trend only |
+| PULSE_WAVE_VELOCITY | m/s | Vascular age indicator | ❌ Device only | ❌ Trend only |
+
+*SpO2 and Heart Rate: Backend supports manual entry; patient app UI deferred.
 
 **Constraints**:
 - `@@unique([source, externalId])` — Prevents device duplicate imports
 - `@@index([patientId, type, timestamp])` — Time-series queries
-- `@@index([patientId, type, source, timestamp])` — Manual dedup window checks
-
-### Alert
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Primary key |
-| patientId | UUID | FK → Patient |
-| triggeredAt | timestamp | When rule fired |
-| ruleId | string | Identifier for the rule (e.g., 'weight_gain_48h') |
-| ruleName | string | Human-readable name |
-| severity | enum | info, warning, critical |
-| status | enum | open, acknowledged, dismissed |
-| inputs | JSONB | Data that triggered alert (explainability) |
-| summaryText | text | Nullable; LLM-generated explanation |
-| acknowledgedBy | UUID | Nullable; FK → Clinician |
-| acknowledgedAt | timestamp | Nullable |
-| createdAt | timestamp | |
-| updatedAt | timestamp | |
-
-**inputs JSONB structure** (example for weight_gain_48h):
-```json
-{
-  "measurements": [
-    { "id": "uuid1", "value": 83.91, "unit": "kg", "timestamp": "..." },
-    { "id": "uuid2", "value": 85.27, "unit": "kg", "timestamp": "..." }
-  ],
-  "oldestValue": 83.91,
-  "newestValue": 85.27,
-  "delta": 1.36,
-  "thresholdKg": 1.36,
-  "windowHours": 48
-}
-```
-
-**Alert De-duplication**: When a rule triggers and an OPEN alert already exists for the same (patientId, ruleId), the existing alert is **updated** with new inputs rather than creating a duplicate. This prevents alert spam for ongoing conditions.
-
-### ClinicianNote
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Primary key |
-| patientId | UUID | FK → Patient |
-| clinicianId | UUID | FK → Clinician |
-| alertId | UUID | Nullable; FK → Alert (attach note to specific alert) |
-| content | text | Note body |
-| createdAt | timestamp | |
-| updatedAt | timestamp | |
-
-**Indexes**:
-- `@@index([patientId, createdAt])` — Patient timeline queries
-- `@@index([alertId])` — Notes by alert
-
-### InteractionLog (RPM/CCM)
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Primary key |
-| patientId | UUID | FK → Patient |
-| clinicianId | UUID | Nullable; FK → Clinician (null for patient actions) |
-| timestamp | timestamp | When interaction occurred |
-| interactionType | enum | See below |
-| durationSeconds | integer | Nullable; for timed reviews |
-| metadata | JSONB | Additional context |
-| createdAt | timestamp | |
-
-**interactionType values**:
-- `patient_checkin` — Patient submitted symptom checkin
-- `patient_measurement` — Patient submitted measurement
-- `clinician_view` — Clinician viewed patient data
-- `clinician_alert_ack` — Clinician acknowledged alert
-- `clinician_note` — Clinician added note
-- `clinician_call` — Phone call logged (future)
-- `clinician_message` — Message sent (future)
 
 ---
 
-## Relationships
-
-```
-Clinic ──────┬───── many ClinicMemberships ───── Clinician
-             ├───── many Enrollments
-             └───── many Invites
-
-Clinician ───┬───── many ClinicMemberships ───── Clinic
-             ├───── many Invites (created)
-             ├───── many InteractionLogs
-             ├───── many ClinicianNotes
-             └───── many Alerts (via acknowledgedBy)
-
-Patient ─────┬───── one PatientProfile
-             ├───── many SymptomCheckins
-             ├───── many Measurements
-             ├───── many Alerts
-             ├───── many InteractionLogs
-             ├───── many ClinicianNotes
-             ├───── many PatientProfileAudits
-             ├───── many Enrollments ───── Clinician + Clinic
-             ├───── many Invites (claimed)
-             └───── many DeviceConnections
-
-Enrollment ──┬───── one CarePlan
-             └───── many PatientProfileAudits (via entityId)
-
-Invite ──────┬───── one Clinic
-             ├───── one Clinician (createdBy)
-             └───── one Patient (claimedBy, nullable)
-
-Alert ─────── many ClinicianNotes (via alertId)
-
-LabReport ───┬───── one Patient
-             ├───── one Document (optional)
-             ├───── one Clinician (verifiedBy, optional)
-             └───── many LabResults
-
-LabResult ──── one LabReport
-```
-
----
-
-## Prototype Entities (Implemented)
+## 4. Clinical Data — Labs
 
 ### LabReport
 | Field | Type | Notes |
@@ -366,9 +261,10 @@ LabResult ──── one LabReport
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
 
-**Indexes**:
-- `@@index([patientId, collectedAt])` — Patient lab timeline
-- `@@index([documentId])` — Document lookup
+**Verification Workflow**:
+- **Who can verify**: Any authenticated clinician enrolled with the patient's clinic
+- **What verification means**: "Reviewed and confirmed as accurately transcribed from the source document/lab report" — NOT clinical interpretation, NOT endorsement of treatment decisions
+- **Automation when verified**: None in MVP (no auto-alerts, no auto-messages)
 
 ### LabResult
 | Field | Type | Notes |
@@ -385,70 +281,199 @@ LabResult ──── one LabReport
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
 
-**Constraints**:
-- `@@unique([reportId, analyteName])` — One result per analyte per report
-- `@@index([reportId])` — Results by report
-
-**LabSource Enum Values**: MANUAL_PATIENT, MANUAL_CLINICIAN, IMPORTED
-
 **LabResultFlag Enum Values**: H (High), L (Low), C (Critical)
 
-**Design Notes**:
-- `source` distinguishes patient-entered from clinician-entered labs
-- `verifiedAt`/`verifiedById` enables clinician verification workflow
-- `analyteCode` supports future LOINC standardization
-- `documentId` optionally links to source PDF (Document entity)
-- Cascade delete ensures orphan cleanup when report is deleted
-
----
-
-## Indexes (MVP)
-
-| Table | Index | Purpose |
-|-------|-------|---------|
-| Clinic | (slug) | Lookup by URL-safe identifier |
-| ClinicMembership | (clinicId, clinicianId) | Membership lookup |
-| ClinicMembership | (clinicianId, status) | Clinician's active clinics |
-| Invite | (code) | Invite claim lookup |
-| Invite | (status, expiresAt) | Cleanup job for expired invites |
-| Invite | (clinicId, status) | Pending invites for clinic |
-| Enrollment | (clinicianId, clinicId, status) | List active patients for clinician in clinic |
-| Enrollment | (patientId, clinicId) | Patient's enrollments per clinic |
-| Measurement | (patientId, type, timestamp) | Time-series queries |
-| SymptomCheckin | (patientId, timestamp) | Timeline queries |
-| Alert | (patientId, status, triggeredAt) | Alert inbox |
-| InteractionLog | (patientId, timestamp) | RPM/CCM monthly summaries |
-| InteractionLog | (clinicianId, timestamp) | Clinician activity reports |
-| PatientProfile | (patientId) | One-to-one with Patient |
-| CarePlan | (enrollmentId) | One-to-one with Enrollment |
-| PatientProfileAudit | (patientId, timestamp) | Profile change history |
-
----
-
-### DeviceConnection (Implemented)
+### Document
 | Field | Type | Notes |
 |-------|------|-------|
 | id | UUID | Primary key |
 | patientId | UUID | FK → Patient |
-| vendor | enum | WITHINGS (extensible to future vendors) |
+| type | enum | LAB_RESULT, OTHER |
+| filename | string | Original filename |
+| mimeType | string | e.g., "application/pdf", "image/jpeg" |
+| sizeBytes | int | File size |
+| storageKey | string | Unique; path in storage |
+| title | string | Nullable; patient-provided title |
+| notes | string | Nullable; patient-provided notes |
+| documentDate | timestamp | Nullable; date on the document |
+| uploadedAt | timestamp | |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+---
+
+## 5. Clinical Data — Medications
+
+### Medication
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| patientId | UUID | FK → Patient |
+| name | string | Medication name |
+| dosage | string | Nullable; e.g., "10mg" |
+| frequency | string | Nullable; e.g., "twice daily" |
+| instructions | string | Nullable; additional instructions |
+| startDate | timestamp | Nullable |
+| endDate | timestamp | Nullable |
+| isActive | boolean | Default: true |
+| discontinuedAt | timestamp | Nullable; when medication was stopped |
+| discontinuedBy | UUID | Nullable; FK → Clinician who discontinued |
+| discontinuedReason | string | Nullable; free-text reason for discontinuation |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+**Status Logic**:
+- Active: `isActive = true` AND `endDate IS NULL OR endDate > now()`
+- Discontinued: `isActive = false` OR `discontinuedAt IS NOT NULL`
+
+**Discontinuation Note**: Reason tracking is free-text for minimal auditability. Structured reason codes deferred.
+
+### MedicationLog
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| medicationId | UUID | FK → Medication |
+| loggedAt | timestamp | When logged |
+| scheduledFor | timestamp | Nullable; scheduled dose time |
+| taken | boolean | Whether dose was taken |
+| notes | string | Nullable; patient notes |
+| createdAt | timestamp | |
+
+---
+
+## 6. Alerts
+
+### Alert
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| patientId | UUID | FK → Patient |
+| triggeredAt | timestamp | When rule fired |
+| ruleId | string | Identifier (e.g., 'weight_gain_48h') |
+| ruleName | string | Human-readable name |
+| severity | enum | INFO, WARNING, CRITICAL |
+| status | enum | OPEN, ACKNOWLEDGED, DISMISSED |
+| inputs | JSONB | Data that triggered alert (explainability) |
+| summaryText | text | Nullable; LLM-generated explanation |
+| acknowledgedBy | UUID | Nullable; FK → Clinician |
+| acknowledgedAt | timestamp | Nullable |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+**Alert Rules (MVP) — Fixed Clinical Defaults**:
+| Rule ID | Condition | Severity |
+|---------|-----------|----------|
+| weight_gain_48h | >2 kg gain in 48h | CRITICAL/WARNING (based on delta) |
+| bp_systolic_high | Systolic ≥180 mmHg | CRITICAL/WARNING (based on value) |
+| bp_systolic_low | Systolic ≤90 mmHg | CRITICAL/WARNING (based on value) |
+| spo2_low | SpO2 ≤92% | CRITICAL/WARNING (based on value) |
+
+**Severity Enum Values**: INFO, WARNING, CRITICAL
+
+**Deduplication**: Alerts deduplicated by `patientId + ruleId + date`. Subsequent triggers update existing OPEN alert rather than creating duplicates.
+
+**Future Enhancement**: Per-clinic configurable thresholds (preferred), then per-patient overrides.
+
+**inputs JSONB structure** (example for weight_gain_48h):
+```json
+{
+  "measurements": [
+    { "id": "uuid1", "value": 83.91, "unit": "kg", "timestamp": "..." },
+    { "id": "uuid2", "value": 85.27, "unit": "kg", "timestamp": "..." }
+  ],
+  "oldestValue": 83.91,
+  "newestValue": 85.27,
+  "delta": 1.36,
+  "thresholdKg": 2.0,
+  "windowHours": 48
+}
+```
+
+---
+
+## 7. RPM/CCM Audit Trail
+
+### InteractionLog
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| patientId | UUID | FK → Patient |
+| clinicianId | UUID | Nullable; FK → Clinician (null for patient actions) |
+| timestamp | timestamp | When interaction occurred |
+| interactionType | enum | See below |
+| durationSeconds | integer | Nullable; for timed reviews (MVP+) |
+| metadata | JSONB | Additional context |
+| createdAt | timestamp | |
+
+**InteractionType Values**:
+- `PATIENT_CHECKIN` — Patient submitted symptom checkin
+- `PATIENT_MEASUREMENT` — Patient submitted measurement
+- `PATIENT_MEDICATION` — Patient created/updated medication
+- `PATIENT_ADHERENCE_LOG` — Patient logged medication adherence
+- `PATIENT_DOCUMENT` — Patient uploaded document
+- `PATIENT_LAB_REPORT` — Patient created lab report
+- `CLINICIAN_VIEW` — Clinician viewed patient data
+- `CLINICIAN_ALERT_ACK` — Clinician acknowledged alert
+- `CLINICIAN_NOTE` — Clinician added note
+- `CLINICIAN_CALL` — Phone call logged (future)
+- `CLINICIAN_MESSAGE` — Message sent (future)
+- `CLINICIAN_MEDICATION_VIEW` — Clinician viewed medications
+- `CLINICIAN_DOCUMENT_VIEW` — Clinician viewed document
+- `CLINICIAN_LAB_VIEW` — Clinician viewed lab
+- `CLINICIAN_LAB_VERIFY` — Clinician verified lab
+- `CLINICIAN_LAB_CREATE` — Clinician created lab for patient
+
+**MVP vs MVP+ Scope**:
+- **MVP**: Interaction logs exist for audit trail (timestamp, type)
+- **MVP+**: Time tracking (durationSeconds), billing report generation, CPT code mapping
+
+### ClinicianNote
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| patientId | UUID | FK → Patient |
+| clinicianId | UUID | FK → Clinician |
+| alertId | UUID | Nullable; FK → Alert (attach note to alert) |
+| content | text | Note body |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+### AuditLog
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| action | string | e.g., 'invite.created', 'enrollment.created' |
+| actorType | string | 'clinician', 'patient', 'system' |
+| actorId | string | Nullable; ID of actor |
+| resourceType | string | 'invite', 'enrollment', 'clinic', etc. |
+| resourceId | string | ID of affected resource |
+| metadata | JSONB | Additional context |
+| ipAddress | string | Nullable; for security auditing |
+| userAgent | string | Nullable; for security auditing |
+| createdAt | timestamp | |
+
+---
+
+## 8. Device Integrations
+
+### DeviceConnection
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| patientId | UUID | FK → Patient |
+| vendor | enum | WITHINGS (future: FITBIT, APPLE_HEALTH) |
 | accessToken | string | Encrypted (AES-256-GCM) |
 | refreshToken | string | Encrypted (AES-256-GCM) |
 | tokenExpiresAt | timestamp | When access token expires |
 | scope | string | Nullable; OAuth scopes granted |
-| withingsUserId | string | Nullable; Vendor user ID for API calls |
+| withingsUserId | string | Nullable; vendor user ID for API calls |
 | status | enum | ACTIVE, EXPIRED, REVOKED, ERROR |
 | lastSyncAt | timestamp | Nullable; last successful sync |
 | lastSyncError | string | Nullable; error message from last sync |
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
 
-**Constraints**:
-- `@@unique([patientId, vendor])` — One connection per vendor per patient
-- `@@index([status, lastSyncAt])` — Background sync job queries
-
-**DeviceVendor Enum Values**: WITHINGS (future: FITBIT, APPLE_HEALTH, etc.)
-
-**DeviceConnectionStatus Enum Values**:
+**DeviceConnectionStatus Values**:
 - ACTIVE — Connection working, tokens valid
 - EXPIRED — Access token expired, needs re-auth
 - REVOKED — User disconnected device
@@ -462,41 +487,81 @@ LabResult ──── one LabReport
 
 ---
 
-## Extensibility Hooks (Schema Reserved, Not Implemented)
+## Entity Relationships
 
-### Document (MVP+ Phase 1)
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Primary key |
-| patientId | UUID | FK → Patient |
-| uploadedAt | timestamp | |
-| filename | string | Original filename |
-| mimeType | string | application/pdf, image/jpeg, etc. |
-| storageUrl | string | S3/GCS path |
-| documentType | enum | lab_result, imaging, other |
-| parsedData | JSONB | Nullable; structured extraction (Phase 2) |
-| status | enum | uploaded, processing, parsed, failed |
+```
+Clinic ──────┬───── many ClinicMemberships ───── Clinician
+             ├───── many Enrollments
+             └───── many Invites
 
-### MedicationReminder (MVP+ Phase 1)
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Primary key |
-| patientId | UUID | FK → Patient |
-| medicationName | string | |
-| dosage | string | |
-| schedule | JSONB | Cron-like or structured times |
-| isActive | boolean | |
+Clinician ───┬───── many ClinicMemberships ───── Clinic
+             ├───── many Invites (created)
+             ├───── many InteractionLogs
+             ├───── many ClinicianNotes
+             ├───── many LabReports (verified)
+             └───── many Alerts (acknowledged)
+
+Patient ─────┬───── one PatientProfile
+             ├───── many SymptomCheckins
+             ├───── many Measurements
+             ├───── many Alerts
+             ├───── many InteractionLogs
+             ├───── many ClinicianNotes
+             ├───── many PatientProfileAudits
+             ├───── many Medications
+             ├───── many Documents
+             ├───── many LabReports
+             ├───── many Enrollments ───── Clinician + Clinic
+             ├───── many Invites (claimed)
+             └───── many DeviceConnections
+
+Enrollment ──┬───── one CarePlan
+             └───── many PatientProfileAudits (via entityId)
+
+Invite ──────┬───── one Clinic
+             ├───── one Clinician (createdBy)
+             └───── one Patient (claimedBy, nullable)
+
+Alert ─────── many ClinicianNotes (via alertId)
+
+LabReport ───┬───── one Patient
+             ├───── one Document (optional)
+             ├───── one Clinician (verifiedBy, optional)
+             └───── many LabResults
+
+Medication ─── many MedicationLogs
+```
 
 ---
 
-## Deferred (No Schema Now)
+## Indexes
 
-- Billing/claims entities (CPT codes, claim status)
-- Risk scores (derived at query time initially)
-- Caregiver accounts
-- Educational content catalog
-- LLM prompt/response audit logs
-- Message threads (clinician-patient messaging)
+| Table | Index | Purpose |
+|-------|-------|---------|
+| Clinic | (slug) | Lookup by URL-safe identifier |
+| Clinic | (status) | Filter active clinics |
+| ClinicMembership | (clinicId, clinicianId) | Membership lookup |
+| ClinicMembership | (clinicianId, status) | Clinician's active clinics |
+| Invite | (code) | Invite claim lookup |
+| Invite | (status, expiresAt) | Cleanup job for expired invites |
+| Invite | (clinicId, status) | Pending invites for clinic |
+| Enrollment | (clinicianId, clinicId, status) | List active patients |
+| Enrollment | (patientId, clinicId) | Patient's enrollments per clinic |
+| Measurement | (patientId, type, timestamp) | Time-series queries |
+| Measurement | (patientId, type, source, timestamp) | Manual dedup window |
+| SymptomCheckin | (patientId, timestamp) | Timeline queries |
+| Alert | (patientId, status, triggeredAt) | Alert inbox |
+| InteractionLog | (patientId, timestamp) | RPM/CCM summaries |
+| InteractionLog | (clinicianId, timestamp) | Clinician activity |
+| PatientProfile | (patientId) | 1:1 with Patient |
+| CarePlan | (enrollmentId) | 1:1 with Enrollment |
+| PatientProfileAudit | (patientId, timestamp) | Profile history |
+| Medication | (patientId, isActive) | Active medications |
+| MedicationLog | (medicationId, loggedAt) | Adherence history |
+| Document | (patientId, uploadedAt) | Document timeline |
+| Document | (patientId, type) | Filter by type |
+| LabReport | (patientId, collectedAt) | Lab timeline |
+| DeviceConnection | (status, lastSyncAt) | Sync job queries |
 
 ---
 
@@ -532,14 +597,26 @@ Two-layer deduplication prevents duplicate data from corrupting trends:
 | Canonical units for Measurement | Consistent storage; convert at boundaries |
 | inputUnit preserves original | Audit trail of what user submitted |
 | Alert update vs create | Prevents alert spam for ongoing conditions |
-| Transaction for Measurement + Log | Atomicity; no orphaned records |
 | Clinic as organization boundary | Multi-tenant isolation; HIPAA compliance |
 | Invite code (40 chars) | ~10^48 combinations; unguessable |
-| DOB verification on claim | Identity verification without global patient search |
-| enrolledVia on Enrollment | Audit trail for how enrollment was created |
-| PatientProfile separate from Patient | Clinical data evolves separately from auth; better audit trail |
-| CarePlan per-enrollment | Multi-clinic patients can have different targets per clinic |
-| Dual CKD stage tracking | Safety: clinician can verify self-reported stage |
-| BP targets as min/max range | Supports personalized targets per KDIGO guidelines |
+| DOB verification on claim | Identity verification without global search |
+| PatientProfile separate from Patient | Clinical data evolves separately; better audit |
+| CarePlan per-enrollment | Multi-clinic patients get different targets |
+| Dual CKD stage tracking | Safety: clinician can verify self-reported |
+| BP targets as min/max range | Supports personalized targets per KDIGO |
 | PatientProfileAudit with changedFields | Explainability: see exactly what changed |
-| actorName in audit | Preserves identity even if clinician is deleted |
+| Medication discontinuation tracking | Audit trail for medication changes |
+| Lab verification workflow | Confirms transcription accuracy (not clinical) |
+
+---
+
+## Deferred (No Schema Yet)
+
+- Billing/claims entities (CPT codes, claim status) — MVP+
+- Risk scores (derived at query time initially)
+- Caregiver accounts
+- Educational content catalog
+- LLM prompt/response audit logs
+- Message threads (clinician-patient messaging)
+- Notification preferences (email settings) — MVP+
+- Notification logs (rate limiting) — MVP+

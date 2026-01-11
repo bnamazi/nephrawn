@@ -23,11 +23,34 @@ Nephrawn augments—not replaces—clinical judgment.
 - Manual measurement entry (weight, BP)
 - Time-series visualization
 - Manual clinician review
-- Basic rule-based alerts (no automation)
-- Interaction logging for RPM/CCM compliance
+- Basic rule-based alerts with fixed clinical thresholds (no automation)
+- Interaction logging for RPM/CCM audit trail (time tracking deferred)
 - Patient clinical profile (CKD stage, comorbidities, medications)
 - Care plan management (dry weight, BP targets, risk flags)
 - Profile/care plan audit trail with change history
+
+### Measurement Types (MVP)
+| Type | Patient Entry | Device Sync | Alerts |
+|------|---------------|-------------|--------|
+| Weight | ✅ | ✅ Withings | ✅ Weight gain rule |
+| Blood Pressure (Systolic/Diastolic) | ✅ | ✅ Withings | ✅ High/low BP rules |
+| SpO2 | Backend supported | ✅ Withings | ✅ Low SpO2 rule |
+| Heart Rate | Backend supported | ✅ Withings | ❌ No rules yet |
+| Body Composition (fat %, muscle, etc.) | ❌ | ✅ Withings | ❌ Trend-only |
+
+**Note**: SpO2 and Heart Rate manual entry UI is deferred (patient app). Clinician app displays all measurement types.
+
+### Alert Rules (MVP) — Fixed Clinical Defaults
+| Rule | Condition | Severity | Configurable |
+|------|-----------|----------|--------------|
+| Weight Gain (48h) | >2 kg gain in 48 hours | CRITICAL | No (MVP) |
+| BP Systolic High | ≥180 mmHg | CRITICAL | No (MVP) |
+| BP Systolic Low | ≤90 mmHg | WARNING | No (MVP) |
+| SpO2 Low | ≤92% | CRITICAL | No (MVP) |
+
+**Future Enhancement**: Per-clinic configurable thresholds (preferred next step), then per-patient overrides for edge cases.
+
+**Body Composition Note**: Fat ratio, muscle mass, and other body composition metrics are captured and trended but do NOT trigger alerts in MVP. Alerting thresholds may be introduced later after clinician validation, likely focusing first on fluid-related proxies rather than body fat %.
 
 ---
 
@@ -82,11 +105,12 @@ The following features are in-scope for the prototype phase:
 - Document metadata tracked (upload date, document type, notes)
 - **Non-goal**: OCR/parsing of lab values (deferred to production)
 
-### 3. Email Notifications for Alerts
+### 3. Email Notifications for Alerts — ⚠️ NOT IMPLEMENTED
 - Clinicians receive email when high-priority alerts trigger
 - Configurable notification preferences per clinician
 - Email contains alert summary with link to patient detail
 - Rate-limited to prevent alert fatigue (daily digest option)
+- **Status**: Deferred to MVP+. No email service, templates, or notification preferences exist yet.
 - **Non-goal**: SMS notifications (deferred)
 
 ### 4. Medication Tracking
@@ -94,7 +118,9 @@ The following features are in-scope for the prototype phase:
 - Adherence confirmation (daily check-in option)
 - Clinicians view medication list in patient profile
 - Medication history tracked over time
+- Discontinuation tracking: reason (free text), date, and clinician recorded for audit trail
 - **Non-goal**: Automated reminders/push notifications (deferred)
+- **Non-goal**: Structured discontinuation reason codes (deferred)
 
 ### 5. Structured Lab Results (Slice 2.5)
 - Separate Labs tab with structured lab results (individual analyte rows)
@@ -104,6 +130,12 @@ The following features are in-scope for the prototype phase:
 - Reference ranges and abnormal flags (High/Low/Critical)
 - LOINC code support for future standardization
 - Optional link to source document (PDF)
+
+**Verification Workflow**:
+- **Who can verify**: Any authenticated clinician enrolled with the patient's clinic
+- **What verification means**: "Reviewed and confirmed as accurately transcribed from the source document/lab report" — NOT clinical interpretation, NOT endorsement of treatment decisions
+- **Automation when verified**: None in MVP (no auto-alerts, no auto-messages)
+
 - **Non-goal**: OCR/parsing of lab documents (deferred to production)
 - **Non-goal**: Lab provider API integration (deferred)
 
@@ -140,15 +172,22 @@ After prototype completion and security hardening, these capabilities extend the
 
 ## RPM/CCM Requirements
 
-The system must support Remote Patient Monitoring (RPM) and Chronic Care Management (CCM) billing:
+The system must support Remote Patient Monitoring (RPM) and Chronic Care Management (CCM) workflows:
 
-- Time-logged patient interactions (billable events)
+### MVP Scope (Audit Trail)
+- Interaction logging with timestamps and type classification
+- Device-derived data with timestamps and source attribution
+- Patient activity records (symptom check-ins, measurements)
+- Clinician note creation timestamps
+
+### MVP+ Scope (Billing)
+- Time tracking per interaction (billable minutes)
 - Monthly activity summaries per patient
-- Device-derived data with timestamps (when available)
 - Clinician review attestation
 - Minimum interaction thresholds per billing period
+- CPT code mapping and billing report generation
 
-These requirements inform schema design. MVP includes basic interaction logging; full billing reports are MVP+.
+**Next Slice Candidate**: Monthly aggregation summaries and time entry for billable interactions.
 
 ---
 

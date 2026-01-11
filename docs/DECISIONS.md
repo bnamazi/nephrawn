@@ -267,3 +267,156 @@ Consequence:
 - Consistent storage in canonical units across manual and device data
 - Trend calculations work identically for device-synced measurements
 - Units.ts updated with clinical thresholds for new body composition types
+
+---
+
+## 2026-01 — Alert thresholds: fixed defaults with future configurability
+
+Context: Alert rules need clinical thresholds (e.g., BP ≥180 mmHg). Options considered:
+1. **Fixed defaults**: Hard-code clinically safe thresholds
+2. **Per-patient configuration**: Each patient can have custom thresholds
+3. **Per-clinic configuration**: Clinic-wide thresholds as program defaults
+
+Decision: MVP uses fixed clinical defaults. Future enhancement path:
+- **Phase 1 (next slice candidate)**: Per-clinic configurable thresholds (one set of defaults per clinic/program)
+- **Phase 2 (later)**: Per-patient overrides (only for edge cases requiring patient-specific thresholds)
+
+Current fixed thresholds:
+- Weight gain: >2 kg in 48h → CRITICAL severity
+- BP systolic high: ≥180 mmHg → CRITICAL severity
+- BP systolic low: ≤90 mmHg → WARNING severity
+- SpO2 low: ≤92% → CRITICAL severity
+
+Severity enum values: INFO, WARNING, CRITICAL
+
+Consequence:
+- MVP has safe, evidence-based defaults
+- No per-patient configuration burden for clinicians
+- Future: clinic can customize thresholds without patient-level complexity
+- Alert rules documented with explicit threshold values
+
+## 2026-01 — Body composition: trend-only, no alerting
+
+Context: Withings Body Pro 2 captures body composition metrics (fat %, muscle mass, bone mass, hydration, pulse wave velocity). Should these trigger alerts?
+
+Decision: Body composition metrics are captured and trended but do NOT trigger alerts in MVP.
+
+Rationale:
+- Clinical significance of body composition changes requires validation
+- Fluid-related proxies (e.g., hydration) may be relevant but need clinician input
+- Alert fatigue risk if adding unvalidated thresholds
+- Trend data valuable for longitudinal assessment without alerting
+
+Future path:
+- Alerting thresholds introduced after clinician validation
+- Likely focus first on fluid-related proxies rather than body fat %
+- May require per-patient or per-condition thresholds
+
+Consequence:
+- All 9 body composition types stored and displayed in charts
+- Clinicians can review trends manually
+- No alert rules for body composition in MVP
+
+## 2026-01 — RPM/CCM scope: audit trail MVP, billing MVP+
+
+Context: RPM/CCM workflows require interaction logging for compliance. Full billing support requires time tracking and report generation.
+
+Decision: Split RPM/CCM into MVP (audit trail) and MVP+ (billing):
+
+**MVP Scope (Audit Trail)**:
+- Interaction logging with timestamps and type classification
+- Patient activity records (symptom check-ins, measurements, document uploads)
+- Clinician activity records (views, note creation, alert acknowledgment)
+- Device data with source attribution
+
+**MVP+ Scope (Billing)**:
+- Time tracking per interaction (durationSeconds field exists but not populated)
+- Monthly activity summaries and aggregation
+- CPT code mapping
+- Billing report generation
+- Minimum interaction threshold validation
+
+Next slice candidate: Monthly aggregation summaries and time entry UI for billable interactions.
+
+Consequence:
+- InteractionLog table populated for audit trail
+- durationSeconds remains nullable in MVP
+- Billing reports not available until MVP+
+- Data model supports billing without schema changes
+
+## 2026-01 — Lab verification: transcription accuracy only
+
+Context: Labs entered by patients need clinician review. What does "verification" mean?
+
+Decision: Lab verification confirms transcription accuracy, not clinical interpretation:
+- **Who can verify**: Any authenticated clinician enrolled with the patient's clinic
+- **What verification means**: "Reviewed and confirmed as accurately transcribed from the source document/lab report"
+- **What it does NOT mean**: Clinical interpretation, endorsement of treatment decisions, or assessment of normal/abnormal status
+- **Automation when verified**: None in MVP (no auto-alerts, no auto-messages)
+
+Consequence:
+- Verified labs display verification badge in UI
+- Verification adds trust layer without implying clinical judgment
+- Future: verified labs could trigger clinical decision support (not in MVP)
+
+## 2026-01 — Medication discontinuation tracking
+
+Context: When medications are stopped, the reason should be recorded for audit trail.
+
+Decision: Add minimal discontinuation tracking to Medication model:
+- `discontinuedAt` — timestamp when stopped
+- `discontinuedBy` — FK to clinician who discontinued (nullable)
+- `discontinuedReason` — free-text reason (nullable)
+
+Rationale:
+- Structured reason codes add complexity without clear benefit yet
+- Free-text captures context for audit trail
+- Optional fields don't burden data entry
+
+Consequence:
+- Medication history shows when and why medications were stopped
+- Audit trail for medication changes
+- Future: structured reason codes can be added if needed
+
+## 2026-01 — SpO2 and Heart Rate: backend supported, patient UI deferred
+
+Context: SpO2 and Heart Rate exist as measurement types. Should patient app support manual entry?
+
+Decision: Backend supports manual entry for all measurement types. Patient app UI for SpO2 and Heart Rate is deferred:
+- SpO2 and Heart Rate can be synced via Withings devices
+- Backend API accepts manual entry for these types
+- Patient app shows Weight and Blood Pressure entry only
+- Clinician app displays all measurement types
+
+Rationale:
+- Device sync provides primary data source for these measurements
+- Manual entry UI adds complexity without clear clinical workflow need
+- Can be added if pulse oximeter users need manual fallback
+
+Consequence:
+- No patient UI blocker for device integration
+- Data model complete for all vital types
+- Future: patient UI can be added without backend changes
+
+## 2026-01 — Email notifications: deferred to MVP+
+
+Context: Alert notifications were planned as prototype scope. Should email be implemented now?
+
+Decision: Email notifications are NOT IMPLEMENTED in MVP. Deferred to MVP+ with documented extension points.
+
+Rationale:
+- Email infrastructure requires provider integration (Resend, SendGrid, or SMTP)
+- Notification preferences need schema additions (NotificationPreference, NotificationLog)
+- Alert-to-email mapping adds complexity to alert service
+- Core alert functionality works without notifications
+- Can be added as future slice without blocking clinical workflows
+
+Extension point documented in ARCH.md:
+- Background worker/job pattern with pluggable email provider adapter
+- NotificationService for preference checking and rate limiting
+
+Consequence:
+- Alerts visible in clinician app only (no email/push)
+- No notification preferences UI needed
+- Schema additions deferred (NotificationPreference, NotificationLog)
+- Future slice: "Email Notifications for Alerts"

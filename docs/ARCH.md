@@ -78,6 +78,7 @@
 | GET | `/patient/dashboard` | Dashboard overview (all summaries) |
 | GET | `/patient/charts/:type` | Time-series data for charting |
 | GET | `/patient/summary/:type` | Measurement summary with trend |
+| GET | `/patient/body-composition` | All body composition measurements |
 | GET | `/patient/medications` | List own medications |
 | POST | `/patient/medications` | Create medication |
 | GET | `/patient/medications/:id` | Get single medication |
@@ -123,6 +124,7 @@
 | POST | `/clinician/patients/:patientId/labs/:id/results` | Add result |
 | PUT | `/clinician/patients/:patientId/labs/:id/results/:resultId` | Update result |
 | DELETE | `/clinician/patients/:patientId/labs/:id/results/:resultId` | Delete result |
+| GET | `/clinician/patients/:patientId/devices` | Patient device connections |
 | GET | `/clinician/alerts` | All alerts for enrolled patients |
 | GET | `/clinician/alerts/:alertId` | Single alert details |
 | POST | `/clinician/alerts/:alertId/acknowledge` | Acknowledge alert |
@@ -131,6 +133,8 @@
 | GET | `/clinician/notes/:noteId` | Get single note |
 | PUT | `/clinician/notes/:noteId` | Update note (author only) |
 | DELETE | `/clinician/notes/:noteId` | Delete note (author only) |
+| GET | `/clinician/enrollments` | List all enrollments (across clinics) |
+| GET | `/clinician/audit-logs` | List audit logs (Owner/Admin) |
 
 ### Clinic & Enrollment Routes (`/clinician/clinic`) — requires clinician role
 | Method | Endpoint | Description |
@@ -229,22 +233,26 @@ These features are in active development as part of prototype scope.
 - `GET /clinician/patients/:patientId/documents` — List patient documents
 - `GET /documents/:documentId/download-url` — Get signed download URL
 
-### 3. Email Notifications
+### 3. Email Notifications — ⚠️ NOT IMPLEMENTED
 
-**Schema additions:**
+**Status**: Deferred to MVP+. This section describes the planned design.
+
+**Schema additions (planned):**
 - `NotificationPreference` — Per-clinician email settings
 - `NotificationLog` — Sent notification history (for rate limiting)
 
-**Services:**
+**Services (planned):**
 - `NotificationService` — Alert-to-notification mapping, preference checking
 - `EmailAdapter` — Email sending (Resend, SendGrid, or SMTP)
 
-**APIs:**
+**APIs (planned):**
 - `GET /clinician/notifications/preferences` — Get notification settings
 - `PUT /clinician/notifications/preferences` — Update notification settings
 
-**Triggers:**
+**Triggers (planned):**
 - Alert creation → NotificationService.notifyIfConfigured()
+
+**Future Extension Point**: Background worker/job pattern with pluggable email provider adapter.
 
 ### 4. Medication Tracking
 
@@ -261,7 +269,7 @@ These features are in active development as part of prototype scope.
 - `PUT /patient/medications/:id` — Update medication
 - `DELETE /patient/medications/:id` — Remove medication
 - `POST /patient/medications/:id/log` — Log adherence
-- `GET /patient/medications/:id/adherence` — Adherence history
+- `GET /patient/medications/:id/logs` — Adherence history
 - `GET /clinician/patients/:patientId/medications` — View patient medications
 
 ### 5. Structured Lab Results (Slice 2.5)
@@ -319,6 +327,33 @@ See DECISIONS.md for rationale on deferral.
 | Prioritization | Background scoring → sort order field | Must be explainable |
 | Push Notifications | FCM/APNs adapter | Medication reminders |
 | Additional Devices | Adapter pattern | Fitbit, Apple Health |
+
+---
+
+## Alert Rule Engine
+
+### Current Rules (MVP) — Fixed Clinical Defaults
+| Rule ID | Trigger Condition | Severity | Hard-coded |
+|---------|-------------------|----------|------------|
+| `weight_gain_48h` | >2 kg gain within 48 hours | CRITICAL/WARNING | Yes |
+| `bp_systolic_high` | Systolic ≥180 mmHg | CRITICAL/WARNING | Yes |
+| `bp_systolic_low` | Systolic ≤90 mmHg | CRITICAL/WARNING | Yes |
+| `spo2_low` | SpO2 ≤92% | CRITICAL/WARNING | Yes |
+
+**Severity Enum**: INFO, WARNING, CRITICAL (rules use dynamic severity based on threshold exceeded)
+
+### Deduplication
+- Alerts deduplicated by `patientId + alertType + date` (one per day per type)
+- Subsequent triggers on same day do not create new alerts
+
+### Body Composition
+- Fat ratio, muscle mass, and other body composition metrics are captured and trended
+- **No alert rules** for body composition in MVP (trend-only)
+- Future: Alerting thresholds may be introduced after clinician validation, likely focusing on fluid-related proxies
+
+### Future Enhancement: Configurable Thresholds
+1. **Per-clinic defaults** (preferred next step): One set of thresholds per clinic/program
+2. **Per-patient overrides** (later): Only for edge cases requiring patient-specific thresholds
 
 ---
 
@@ -420,12 +455,20 @@ Constraint: Must be cacheable; never blocks UI render
 
 ## RPM/CCM Architectural Considerations
 
-- All clinician actions log `interactionType` and duration
-- Patient data submissions create implicit interactions
-- Monthly aggregation view requires indexed timestamps
-- Device data must retain original source timestamp
-- Clinician "review" action creates auditable event
-- InteractionLog table supports billing queries
+### MVP Scope (Audit Trail)
+- All clinician actions log `interactionType` and timestamp
+- Patient data submissions create implicit Interaction records
+- Device data retains original source timestamp
+- Clinician "review" and "acknowledge" actions create auditable events
+- Interaction table provides audit trail for RPM/CCM evidence
+
+### MVP+ Scope (Billing)
+- Duration/time tracking per interaction (billable minutes)
+- Monthly aggregation views with indexed timestamps
+- CPT code mapping and billing report generation
+- Minimum interaction threshold validation
+
+**Next Slice Candidate**: Monthly aggregation summaries and time entry UI for billable interactions.
 
 ---
 
