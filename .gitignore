@@ -20,3 +20,6 @@ prisma/migrations/**/migration_lock.toml
 .dart_tool/
 build/
 .pub/
+
+# Claude Code
+.claude/

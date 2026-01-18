@@ -487,6 +487,87 @@ The schema prioritizes:
 
 ---
 
+## 9. Billing & Time Tracking
+
+### TimeEntry
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| patientId | UUID | FK → Patient |
+| clinicianId | UUID | FK → Clinician |
+| clinicId | UUID | FK → Clinic |
+| entryDate | date | Date of service |
+| durationMinutes | integer | Billable minutes (1-120) |
+| activity | enum | See TimeEntryActivity below |
+| notes | text | Nullable; description of activity |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+**TimeEntryActivity Values**:
+- PATIENT_REVIEW — Reviewing patient data
+- CARE_PLAN_UPDATE — Updating care plan
+- ALERT_RESPONSE — Responding to alert
+- PHONE_CALL — Phone call with patient
+- LAB_REVIEW — Reviewing lab results
+- OTHER — Other billable activity
+
+**Constraints**: Index (patientId, clinicId, entryDate), Index (clinicianId, entryDate)
+
+**Design Note**: TimeEntry is separate from InteractionLog because:
+1. TimeEntry is explicitly entered by clinicians for billing; InteractionLog is system-generated
+2. TimeEntry is editable (correct mistakes); InteractionLog is append-only audit
+3. TimeEntry has activity categorization for CPT mapping; InteractionLog has interaction types for audit
+4. TimeEntry duration is clinician-attested; InteractionLog duration would be inferred
+
+---
+
+## 10. Notifications
+
+### NotificationPreference
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| clinicianId | UUID | FK → Clinician (unique, 1:1) |
+| emailEnabled | boolean | Default: true |
+| emailOnCritical | boolean | Default: true |
+| emailOnWarning | boolean | Default: true |
+| emailOnInfo | boolean | Default: false |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+
+### NotificationLog
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | Primary key |
+| clinicianId | UUID | FK → Clinician |
+| patientId | UUID | FK → Patient |
+| alertId | UUID | Nullable; FK → Alert |
+| type | string | ALERT_EMAIL, ESCALATION_EMAIL |
+| recipient | string | Email address |
+| subject | string | |
+| sentAt | timestamp | |
+
+**Constraints**: Index (clinicianId, patientId, sentAt) for rate limiting, Index (alertId)
+
+---
+
+## 11. Alert Escalation (Extension to Alert model)
+
+The Alert model (Section 6) is extended with escalation fields:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| escalationLevel | integer | Default: 0; incremented on escalation |
+| escalatedAt | timestamp | Nullable; when last escalated |
+| lastNotifiedAt | timestamp | Nullable; when last email sent |
+
+**Escalation Logic**:
+- Level 0: Initial alert, no escalation
+- Level 1: 4 hours unacknowledged → escalate, re-notify
+- Level 2: 8 hours unacknowledged → escalate, re-notify (optional: notify supervisor)
+
+---
+
 ## Entity Relationships
 
 ```
@@ -522,7 +603,8 @@ Invite ──────┬───── one Clinic
              ├───── one Clinician (createdBy)
              └───── one Patient (claimedBy, nullable)
 
-Alert ─────── many ClinicianNotes (via alertId)
+Alert ────────┬───── many ClinicianNotes (via alertId)
+              └───── many NotificationLogs (via alertId)
 
 LabReport ───┬───── one Patient
              ├───── one Document (optional)
@@ -530,6 +612,12 @@ LabReport ───┬───── one Patient
              └───── many LabResults
 
 Medication ─── many MedicationLogs
+
+TimeEntry ─────── Patient + Clinician + Clinic
+
+NotificationPreference ─── Clinician (1:1)
+
+NotificationLog ───── Clinician + Patient + Alert (optional)
 ```
 
 ---
@@ -562,6 +650,11 @@ Medication ─── many MedicationLogs
 | Document | (patientId, type) | Filter by type |
 | LabReport | (patientId, collectedAt) | Lab timeline |
 | DeviceConnection | (status, lastSyncAt) | Sync job queries |
+| TimeEntry | (patientId, clinicId, entryDate) | Billing summary queries |
+| TimeEntry | (clinicianId, entryDate) | Clinician activity reports |
+| NotificationLog | (clinicianId, patientId, sentAt) | Rate limiting check |
+| NotificationLog | (alertId) | Alert notification history |
+| Alert | (status, escalationLevel, triggeredAt) | Escalation job query |
 
 ---
 
@@ -612,11 +705,11 @@ Two-layer deduplication prevents duplicate data from corrupting trends:
 
 ## Deferred (No Schema Yet)
 
-- Billing/claims entities (CPT codes, claim status) — MVP+
-- Risk scores (derived at query time initially)
-- Caregiver accounts
-- Educational content catalog
-- LLM prompt/response audit logs
-- Message threads (clinician-patient messaging)
-- Notification preferences (email settings) — MVP+
-- Notification logs (rate limiting) — MVP+
+- BillingPeriod cache table — Phase 2 (compute on-demand for MVP)
+- Billing claims entities (837P export, claim status) — Phase 2
+- Risk scores (computed at query time initially) — Phase 3
+- Caregiver accounts — Phase 2
+- Educational content catalog — Phase 2
+- LLM prompt/response audit logs — Phase 3
+- Message threads (clinician-patient messaging) — Phase 2
+- AlertStatusHistory (full status change audit) — Phase 2 if needed

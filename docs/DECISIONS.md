@@ -398,25 +398,212 @@ Consequence:
 - Data model complete for all vital types
 - Future: patient UI can be added without backend changes
 
-## 2026-01 — Email notifications: deferred to MVP+
+## 2026-01 — Email notifications: moved to MVP scope
 
-Context: Alert notifications were planned as prototype scope. Should email be implemented now?
+Context: Alert notifications were initially deferred. Re-evaluated for MVP inclusion.
 
-Decision: Email notifications are NOT IMPLEMENTED in MVP. Deferred to MVP+ with documented extension points.
+Decision: Email notifications ARE INCLUDED in MVP scope.
 
 Rationale:
-- Email infrastructure requires provider integration (Resend, SendGrid, or SMTP)
-- Notification preferences need schema additions (NotificationPreference, NotificationLog)
-- Alert-to-email mapping adds complexity to alert service
-- Core alert functionality works without notifications
-- Can be added as future slice without blocking clinical workflows
+- Clinicians cannot monitor alerts 24/7 without notification
+- Critical alerts (e.g., severe hypertension) require timely response
+- Email is simpler to implement than push notifications
+- Rate limiting prevents alert fatigue
+- Escalation provides safety net for unacknowledged alerts
 
-Extension point documented in ARCH.md:
-- Background worker/job pattern with pluggable email provider adapter
-- NotificationService for preference checking and rate limiting
+Implementation approach:
+- Immediate dispatch (not queued) with async fire-and-forget
+- Rate limiting: 1 email per patient per hour per clinician
+- Escalation: 4-hour and 8-hour re-notification for OPEN alerts
+- Email provider: Resend or SendGrid via adapter pattern
 
 Consequence:
-- Alerts visible in clinician app only (no email/push)
-- No notification preferences UI needed
-- Schema additions deferred (NotificationPreference, NotificationLog)
-- Future slice: "Email Notifications for Alerts"
+- NotificationPreference and NotificationLog tables added to schema
+- Background job for escalation checks (every 30 minutes)
+- Email failures logged but don't block alert creation
+
+---
+
+## 2026-01 — Billing readiness: moved to MVP scope
+
+Context: Billing (time tracking, device day counting, reports) was initially MVP+. Re-evaluated for production viability.
+
+Decision: Billing readiness IS INCLUDED in MVP scope.
+
+Rationale:
+- Without billing, clinics cannot justify platform cost
+- Every day without time tracking is lost billable documentation
+- Device day counting is required for RPM 99454 eligibility
+- Schema addition is minimal (TimeEntry table)
+- Aggregation queries are straightforward
+
+What "billing readiness" includes:
+- Manual time entry (clinician logs billable minutes)
+- Device transmission day counting (query on Measurement table)
+- Monthly summary report (JSON endpoint)
+- CPT code eligibility indicators (display only)
+
+What it does NOT include:
+- Claims submission
+- PDF report generation
+- EHR integration
+
+Consequence:
+- TimeEntry table added to schema
+- Billing summary and report endpoints added to API
+- Time logging UI added to clinician app
+- Clinics can verify billing eligibility from day one
+
+---
+
+## 2026-01 — Time tracking: Separate TimeEntry vs extending InteractionLog
+
+Context: Need to track clinician time for CCM/RPM billing. InteractionLog already has `durationSeconds` field.
+
+Options considered:
+1. **Populate InteractionLog.durationSeconds**: Extend existing table
+2. **Create TimeEntry table**: Separate billable time tracking
+
+Decision: **Create separate TimeEntry table** for billable time.
+
+Rationale:
+- InteractionLog is append-only audit trail; TimeEntry needs to be editable (clinicians correct mistakes)
+- InteractionLog duration would be inferred/automatic; TimeEntry duration is clinician-attested
+- TimeEntry needs activity categorization for CPT mapping; InteractionLog has different interaction types
+- Billing attestation requires explicit clinician entry, not inferred system data
+- InteractionLog.durationSeconds remains nullable; can be populated later for analytics
+
+Consequence:
+- Two sources of duration data: TimeEntry (billing), InteractionLog (audit)
+- Clinicians must manually log time (no automatic capture in MVP)
+- Future: can correlate TimeEntry with InteractionLog for validation
+
+---
+
+## 2026-01 — Device day counting: Query-time vs cached aggregation
+
+Context: RPM 99454 requires 16+ days of device transmission per 30-day period. Need to count distinct days with device data.
+
+Options considered:
+1. **Query-time calculation**: Compute on each billing summary request
+2. **Cached BillingPeriod table**: Precompute and update via background job
+
+Decision: **Query-time calculation** for MVP.
+
+Rationale:
+- Measurement table already indexed on (patientId, type, timestamp)
+- Query is simple: `COUNT(DISTINCT DATE(timestamp)) WHERE source != 'manual'`
+- Patient volume is low initially (hundreds, not thousands)
+- Avoids cache invalidation complexity when measurements are edited/deleted
+- BillingPeriod cache can be added in Phase 2 if performance requires
+
+Query pattern:
+```sql
+SELECT COUNT(DISTINCT DATE(timestamp)) as device_days
+FROM measurements
+WHERE patient_id = $1
+  AND source != 'manual'
+  AND timestamp >= $2  -- period start
+  AND timestamp < $3   -- period end
+```
+
+Consequence:
+- Billing summary endpoint may be slower with high measurement volume
+- No BillingPeriod table in MVP schema
+- Add index: `(patientId, source, timestamp)` if needed for performance
+
+---
+
+## 2026-01 — Alert escalation: Fields on Alert vs separate AlertEscalation table
+
+Context: Need to track escalation for unacknowledged alerts (re-notify after 4 hours).
+
+Options considered:
+1. **AlertEscalation table**: Full history of all escalations
+2. **Fields on Alert**: escalationLevel, escalatedAt, lastNotifiedAt
+
+Decision: **Add fields to Alert table** for MVP.
+
+Rationale:
+- Only need current escalation state, not full history
+- Reduces join complexity for escalation job
+- AlertEscalation table can be added later if audit requires full history
+- Simpler schema change (3 nullable fields vs new table + relations)
+
+Fields added:
+- `escalationLevel Int @default(0)` — 0 = no escalation, 1+ = escalation count
+- `escalatedAt DateTime?` — when last escalated
+- `lastNotifiedAt DateTime?` — when last email sent (for rate limiting)
+
+Escalation logic:
+- Job runs every 30 minutes
+- Query: `WHERE status = 'OPEN' AND triggeredAt < NOW() - 4h AND escalationLevel < 2`
+- Action: increment level, set escalatedAt, trigger notification
+
+Consequence:
+- No escalation history (only current state)
+- Escalation capped at level 2 (8 hours) — beyond that, likely workflow issue
+- Future: add AlertEscalation table if full history needed
+
+---
+
+## 2026-01 — Email dispatch: Immediate vs queued
+
+Context: When alerts trigger, clinicians should be notified via email.
+
+Options considered:
+1. **Immediate dispatch**: Send email synchronously in alert creation flow
+2. **Queued dispatch**: Push to job queue, process async
+
+Decision: **Immediate dispatch** for MVP, with async fire-and-forget.
+
+Rationale:
+- Alert volume is low (tens per day, not thousands)
+- Email sending is fast (< 1 second with Resend/SendGrid)
+- Queue infrastructure adds complexity (Redis, Bull)
+- Can wrap in try/catch; failure doesn't block alert creation
+
+Pattern:
+```typescript
+// In AlertService.create()
+const alert = await prisma.alert.create({ ... });
+// Fire and forget - don't await
+NotificationService.notifyOnAlert(alert).catch(err => {
+  logger.error({ err, alertId: alert.id }, 'Failed to send notification');
+});
+return alert;
+```
+
+Consequence:
+- No job queue required for MVP
+- Email failures logged but don't block alert creation
+- Escalation job handles missed notifications (re-sends)
+- Phase 2: add job queue if volume increases or reliability requires
+
+---
+
+## 2026-01 — Notification rate limiting: Per-patient-per-hour
+
+Context: Multiple alerts for same patient could cause email spam.
+
+Decision: Rate limit to **1 email per patient per clinician per hour**.
+
+Rationale:
+- Alert deduplication already prevents duplicate alerts per day
+- But different alert types (weight + BP) could trigger same hour
+- 1 per hour balances responsiveness with fatigue prevention
+
+Implementation:
+```sql
+SELECT COUNT(*) FROM notification_logs
+WHERE clinician_id = $1
+  AND patient_id = $2
+  AND sent_at > NOW() - INTERVAL '1 hour'
+```
+
+If count > 0, skip notification (already notified about this patient recently).
+
+Consequence:
+- Clinician won't be overwhelmed by multiple alerts for same patient
+- Subsequent alerts within hour are visible in app but not emailed
+- Escalation job provides catch-up for missed high-priority alerts

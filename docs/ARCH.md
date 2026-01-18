@@ -47,6 +47,25 @@
 - Interaction logging (RPM/CCM)
 - Time-series query endpoints
 
+### Billing & Reporting Module (MVP)
+- Time entry CRUD (clinician-entered billable time)
+- Device transmission day calculation
+- Billing period aggregation (monthly summaries)
+- Eligibility indicator computation (CPT code thresholds)
+- Billing report endpoints (per-patient, per-clinic)
+
+### Notification Module (MVP)
+- Email dispatch for critical/warning alerts
+- Clinician notification preferences
+- Rate limiting (prevent alert fatigue)
+- Alert escalation for unacknowledged alerts
+
+### Background Jobs (MVP)
+- Withings device sync (every 15 minutes) — IMPLEMENTED
+- Invite expiration cleanup (daily) — IMPLEMENTED
+- Alert escalation check (every 30 minutes) — TO BE IMPLEMENTED
+- Email notification dispatch (on alert creation) — TO BE IMPLEMENTED
+
 ---
 
 ## Current API Surface
@@ -151,6 +170,23 @@
 | DELETE | `/clinician/clinic/:clinicId/invites/:inviteId` | Revoke pending invite |
 | GET | `/clinician/clinic/:clinicId/enrollments` | List active enrollments |
 | DELETE | `/clinician/clinic/:clinicId/enrollments/:enrollmentId` | Discharge patient |
+
+### Billing Routes (`/clinician`) — requires clinician role
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/clinician/patients/:patientId/time-entries` | Log billable time |
+| GET | `/clinician/patients/:patientId/time-entries` | List time entries (with date filter) |
+| PUT | `/clinician/time-entries/:id` | Update time entry (author only) |
+| DELETE | `/clinician/time-entries/:id` | Delete time entry (author only) |
+| GET | `/clinician/patients/:patientId/billing-summary` | Monthly summary for patient |
+| GET | `/clinician/clinic/:clinicId/billing-report` | Clinic-wide monthly report |
+| GET | `/clinician/clinic/:clinicId/billing-report/export` | Export as CSV |
+
+### Notification Routes (`/clinician`) — requires clinician role
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/clinician/notifications/preferences` | Get own notification preferences |
+| PUT | `/clinician/notifications/preferences` | Update notification preferences |
 
 ### Patient App (MVP)
 - Login / session management
@@ -300,21 +336,21 @@ These features are in active development as part of prototype scope.
 
 ---
 
-## Deferred to Hardening Phase
+## Security Hardening Checklist
 
-The following items are intentionally deferred until prototype is feature-complete:
+The following items are **required before production deployment**:
 
-| Item | Current State | Hardening Action |
-|------|---------------|------------------|
-| JWT secret | Fallback to hardcoded value | Fail if ENV not set |
-| Rate limiting | Not implemented | Add to auth endpoints |
-| Token persistence | In-memory (web) | localStorage with refresh |
-| Input validation | Basic | Bounds checking on all measurements |
-| Logging | console.log scattered | Structured logging with correlation IDs |
-| CORS | Hardcoded localhost | Environment-based configuration |
-| Error handling | Generic 500s | Categorized error responses |
+| Item | Status | Action |
+|------|--------|--------|
+| JWT secret | ⚠️ Has fallback | Remove fallback; require ENV |
+| Rate limiting | ✅ Implemented | Verify on auth endpoints |
+| Token persistence (web) | ⚠️ In-memory | Implement httpOnly cookie or localStorage |
+| Input validation | ✅ Implemented | Verify bounds on measurements |
+| Structured logging | ✅ Implemented | Verify no PHI in logs |
+| CORS | ⚠️ Hardcoded | Environment-based configuration |
+| Error handling | ✅ Implemented | Verify 4xx vs 5xx differentiation |
 
-See DECISIONS.md for rationale on deferral.
+See HARDENING_PLAN.md for detailed remediation steps.
 
 ---
 
@@ -453,22 +489,99 @@ Constraint: Must be cacheable; never blocks UI render
 
 ---
 
+## Billing & Reporting Architecture
+
+### Time Tracking Model
+
+Time is tracked in two complementary ways:
+
+1. **Explicit time entries** (TimeEntry table): Clinician manually logs billable time with activity type, duration, and notes. Editable. Used for billing calculations.
+
+2. **Implicit interaction logging** (InteractionLog.durationSeconds): System records duration when available (e.g., time spent on patient detail page). Read-only audit trail. Not used for billing.
+
+### Device Day Calculation
+
+Device transmission days are calculated as:
+```sql
+SELECT COUNT(DISTINCT DATE(timestamp))
+FROM measurements
+WHERE patientId = :patientId
+  AND source != 'manual'
+  AND timestamp >= :periodStart
+  AND timestamp < :periodEnd
+```
+
+This count is computed on-demand (not cached) to ensure accuracy. Caching may be added in Phase 2 if performance requires it.
+
+### Monthly Summary Structure
+
+```json
+{
+  "patientId": "uuid",
+  "clinicId": "uuid",
+  "period": { "start": "2026-01-01", "end": "2026-01-31" },
+  "deviceDays": 18,
+  "manualDays": 5,
+  "totalMeasurements": 42,
+  "clinicalMinutes": 35,
+  "timeEntries": [
+    { "date": "2026-01-05", "minutes": 15, "activity": "PATIENT_REVIEW" },
+    { "date": "2026-01-12", "minutes": 20, "activity": "CARE_PLAN_UPDATE" }
+  ],
+  "eligibility": {
+    "99454": { "eligible": true, "deviceDays": 18, "threshold": 16 },
+    "99457": { "eligible": true, "minutes": 35, "threshold": 20 },
+    "99458": { "eligible": false, "additionalBlocks": 0, "threshold": 20 }
+  }
+}
+```
+
+---
+
+## Notification Architecture
+
+### Email Dispatch Flow
+
+1. Alert created → AlertService.create()
+2. After commit → NotificationService.notifyOnAlert(alert)
+3. Check clinician preferences → shouldNotify(clinicianId, severity)
+4. If yes → EmailService.sendAlertEmail(clinicianId, alert)
+5. Log to NotificationLog table
+
+### Rate Limiting
+
+- Maximum 1 email per patient per hour per clinician
+- Check: `SELECT COUNT(*) FROM notification_logs WHERE clinicianId = X AND patientId = Y AND sentAt > NOW() - INTERVAL '1 hour'`
+
+### Escalation Flow
+
+1. Background job runs every 30 minutes
+2. Query: `SELECT * FROM alerts WHERE status = 'OPEN' AND triggeredAt < NOW() - INTERVAL '4 hours' AND escalationLevel = 0`
+3. For each: increment escalationLevel, update escalatedAt, trigger notification
+
+### Preference Model
+
+```json
+{
+  "emailEnabled": true,
+  "emailOnCritical": true,
+  "emailOnWarning": true,
+  "emailOnInfo": false
+}
+```
+
+---
+
 ## RPM/CCM Architectural Considerations
 
-### MVP Scope (Audit Trail)
+### MVP Scope (Audit Trail + Billing)
 - All clinician actions log `interactionType` and timestamp
 - Patient data submissions create implicit Interaction records
 - Device data retains original source timestamp
 - Clinician "review" and "acknowledge" actions create auditable events
 - Interaction table provides audit trail for RPM/CCM evidence
-
-### MVP+ Scope (Billing)
-- Duration/time tracking per interaction (billable minutes)
-- Monthly aggregation views with indexed timestamps
-- CPT code mapping and billing report generation
-- Minimum interaction threshold validation
-
-**Next Slice Candidate**: Monthly aggregation summaries and time entry UI for billable interactions.
+- **TimeEntry table for explicit billable time logging**
+- **Monthly billing summary endpoints for eligibility verification**
 
 ---
 

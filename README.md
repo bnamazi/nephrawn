@@ -10,9 +10,10 @@ Nephrawn enables structured collection of patient-reported symptoms, device-deri
 
 ## Features
 
-### Current (MVP)
+### Implemented
 - **Patient symptom tracking** - Structured check-ins for CKD-relevant symptoms
 - **Manual measurement entry** - Weight, blood pressure, SpO2, heart rate
+- **Device integration (Withings)** - Automatic sync of weight, BP, body composition
 - **Time-series visualization** - Charts with clinically meaningful trend detection
 - **Rule-based alerts** - Threshold-based notifications with explainability
 - **Clinic-initiated enrollment** - Secure invite model with DOB verification
@@ -21,14 +22,14 @@ Nephrawn enables structured collection of patient-reported symptoms, device-deri
 - **RPM/CCM interaction logging** - Audit trail for billing compliance
 - **Patient clinical profile** - CKD stage, comorbidities, medications tracking
 - **Care plan management** - Dry weight targets, BP ranges, risk flags per patient
-- **Profile completeness banners** - Guides clinicians to verify critical data
+- **Medication tracking** - With adherence logging
+- **Structured lab results** - Manual entry with clinician verification
+- **Document uploads** - Lab PDFs and clinical documents
 - **Audit history** - Full change log for profile and care plan modifications
 
-### Planned (MVP+)
-- Device integration (Withings)
-- Lab result uploads
-- LLM-powered summaries
-- Email notifications
+### In Progress (MVP Completion)
+- **Email notifications** - Alert emails with escalation
+- **Billing readiness** - Time tracking, device day counting, monthly reports
 
 ## Architecture
 
@@ -155,7 +156,8 @@ After seeding the database:
 - [Architecture](docs/ARCH.md) - Technical design and API reference
 - [Database Schema](docs/DB.md) - Domain model
 - [Decisions](docs/DECISIONS.md) - Design rationale and tradeoffs
-- [Enrollment Plan](docs/PLAN-enrollment.md) - Implementation status
+- [Implementation Slices](docs/SLICES.md) - Feature implementation status
+- [Hardening Plan](docs/HARDENING_PLAN.md) - Security checklist
 
 ## Key Design Decisions
 

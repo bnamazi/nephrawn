@@ -17,17 +17,34 @@ Nephrawn augments—not replaces—clinical judgment.
 - Maintain transparency and explainability
 
 ## MVP Scope
+
+MVP enables production deployment to clinics with CMS billing capability.
+
+### Core Patient Capabilities
 - Patient symptom tracking
 - Clinic-initiated patient enrollment (invite model)
-- Patient–clinician relationship management
 - Manual measurement entry (weight, BP)
-- Time-series visualization
-- Manual clinician review
-- Basic rule-based alerts with fixed clinical thresholds (no automation)
-- Interaction logging for RPM/CCM audit trail (time tracking deferred)
-- Patient clinical profile (CKD stage, comorbidities, medications)
+- Device-synced measurements (Withings)
+- Medication tracking with adherence logging
+- Lab result entry (structured, with clinician verification)
+- View own history, alerts, enrolled clinics
+
+### Core Clinician Capabilities
+- Patient panel review with alert inbox
+- Time-series visualization and trend analysis
 - Care plan management (dry weight, BP targets, risk flags)
-- Profile/care plan audit trail with change history
+- Clinical notes (standalone and alert-attached)
+- Lab result verification workflow
+- **Time logging for billable interactions**
+- **Monthly billing summary reports**
+
+### Core Platform Capabilities
+- Multi-clinic support with role-based access
+- Rule-based alerts with fixed clinical thresholds
+- Interaction logging for RPM/CCM audit trail
+- **Device transmission day tracking (for 99454 eligibility)**
+- **Email notifications for critical alerts**
+- Structured logging and health checks
 
 ### Measurement Types (MVP)
 | Type | Patient Entry | Device Sync | Alerts |
@@ -51,6 +68,20 @@ Nephrawn augments—not replaces—clinical judgment.
 **Future Enhancement**: Per-clinic configurable thresholds (preferred next step), then per-patient overrides for edge cases.
 
 **Body Composition Note**: Fat ratio, muscle mass, and other body composition metrics are captured and trended but do NOT trigger alerts in MVP. Alerting thresholds may be introduced later after clinician validation, likely focusing first on fluid-related proxies rather than body fat %.
+
+### Billing Readiness (MVP)
+| Capability | CMS Code | MVP Scope |
+|------------|----------|-----------|
+| Device transmission days | 99454 | Count days with device data per 30-day period |
+| Clinical staff time | 99457, 99490 | Manual time entry with activity type |
+| Monthly summary report | All | JSON endpoint with eligibility indicators |
+| CPT code eligibility | All | Display eligible codes based on thresholds |
+
+**Non-Goals for Billing MVP:**
+- Claims submission to clearinghouses
+- EHR integration
+- PDF report generation
+- Automated time capture
 
 ---
 
@@ -82,16 +113,18 @@ Nephrawn uses a **clinic-initiated invite model** for patient enrollment. This e
 - Black-box AI predictions
 - FDA-cleared diagnostic claims
 - Full EHR integration
+- Claims submission (export only)
+- Push notifications (email only)
+- Additional device vendors beyond Withings
+- AI/ML features (risk scoring, summarization)
 
 ---
 
-## Prototype Scope (Option B Features)
+## Production MVP Features
 
-**Intent**: Before production hardening, the prototype will include enhanced data capture features to enable end-to-end clinical workflow evaluation.
+The following features comprise the production-ready MVP:
 
-The following features are in-scope for the prototype phase:
-
-### 1. Device Integration (Withings)
+### 1. Device Integration (Withings) — IMPLEMENTED
 - OAuth-based authorization flow for Withings devices
 - Automatic sync of weight and blood pressure measurements
 - Device data stored with `source = 'withings'` for traceability
@@ -105,13 +138,13 @@ The following features are in-scope for the prototype phase:
 - Document metadata tracked (upload date, document type, notes)
 - **Non-goal**: OCR/parsing of lab values (deferred to production)
 
-### 3. Email Notifications for Alerts — ⚠️ NOT IMPLEMENTED
-- Clinicians receive email when high-priority alerts trigger
+### 3. Email Notifications for Alerts — TO BE IMPLEMENTED
+- Clinicians receive email when CRITICAL/WARNING alerts trigger
 - Configurable notification preferences per clinician
 - Email contains alert summary with link to patient detail
-- Rate-limited to prevent alert fatigue (daily digest option)
-- **Status**: Deferred to MVP+. No email service, templates, or notification preferences exist yet.
-- **Non-goal**: SMS notifications (deferred)
+- Rate-limited to prevent alert fatigue (1 email per patient per hour)
+- Alert escalation for unacknowledged alerts (4-hour threshold)
+- **Non-goal**: SMS notifications, push notifications (deferred)
 
 ### 4. Medication Tracking
 - Patients log current medications with dosage
@@ -139,34 +172,43 @@ The following features are in-scope for the prototype phase:
 - **Non-goal**: OCR/parsing of lab documents (deferred to production)
 - **Non-goal**: Lab provider API integration (deferred)
 
-### Prototype Completion Criteria
-- All five features implemented, tested, and documented
-- End-to-end clinical workflows exercisable
-- Feature interactions understood and documented
-- Ready for holistic security hardening
+### 6. Billing Readiness — TO BE IMPLEMENTED
+- Clinician time logging (manual entry per patient interaction)
+- Activity type classification (patient review, care plan update, alert response, phone call, lab review)
+- Device transmission day counting (for RPM 99454 eligibility)
+- Monthly billing summary report (per-patient, per-clinic)
+- CPT code eligibility indicators (99454, 99457, 99458, 99490)
+- **Non-goal**: Claims submission, PDF generation, EHR integration
+
+### MVP Completion Criteria
+- All six features implemented, tested, and documented
+- End-to-end clinical workflows exercisable (symptom → alert → notification → response)
+- Billing reports generatable for sample patients
+- Security hardening complete (no critical vulnerabilities)
+- Ready for production deployment
 
 ---
 
-## Production Roadmap (Post-Prototype)
+## Production Roadmap
 
-After prototype completion and security hardening, these capabilities extend the platform.
+### Phase 2: Automation & Efficiency
+- **Per-clinic alert thresholds**: Configurable thresholds per clinic
+- **Alert escalation enhancements**: Multi-level escalation, supervisor notification
+- **Push notifications**: Mobile push for patients and clinicians
+- **Lab OCR**: Extract values from uploaded PDFs
+- **Additional devices**: Fitbit, Apple Health via adapter pattern
 
-### Production Phase 1: Hardening & Deployment
-- Security hardening (auth, rate limiting, logging)
-- Production deployment configuration
-- Performance optimization
-- Compliance documentation
+### Phase 3: AI-Assisted Workflows
+- **LLM summarization**: Natural language explanations for trends
+- **Risk scoring**: Explainable patient prioritization
+- **Intelligent alerts**: ML-based threshold personalization
+- **Care gap detection**: Automated identification of missing data
 
-### Production Phase 2: Structured Data & Automation
-- **Lab Results (Structured)**: OCR/parsing of uploaded documents; manual correction UI
-- **Educational Content Delivery**: Condition-specific articles, nutrition guidance
-- **Device Expansion**: Additional vendors via adapter pattern (Fitbit, Apple Health)
-- **Push Notifications**: Medication reminders, appointment alerts
-
-### Production Phase 3: AI-Assisted Workflows
-- **LLM Summarization**: Natural language explanations for alerts, trends
-- **Patient Education Generation**: Personalized explanations of lab results, trends
-- **Clinician Prioritization**: Risk-informed patient list ordering (explainable scores)
+### Phase 4: Integration & Scale
+- **EHR integration**: Read patient demographics, write notes
+- **Claims submission**: Direct integration with clearinghouses
+- **Multi-region deployment**: HIPAA-compliant scaling
+- **API for third parties**: External developer access
 
 ---
 
@@ -174,20 +216,34 @@ After prototype completion and security hardening, these capabilities extend the
 
 The system must support Remote Patient Monitoring (RPM) and Chronic Care Management (CCM) workflows:
 
-### MVP Scope (Audit Trail)
-- Interaction logging with timestamps and type classification
-- Device-derived data with timestamps and source attribution
-- Patient activity records (symptom check-ins, measurements)
-- Clinician note creation timestamps
+### MVP Scope (Audit Trail + Billing Readiness)
 
-### MVP+ Scope (Billing)
-- Time tracking per interaction (billable minutes)
-- Monthly activity summaries per patient
-- Clinician review attestation
-- Minimum interaction thresholds per billing period
-- CPT code mapping and billing report generation
+| Requirement | Implementation |
+|-------------|----------------|
+| Device transmission days (99454) | Count distinct days with device-sourced measurements per patient per 30-day period |
+| Clinical staff time (99457, 99490) | Manual time entry with activity type, duration, notes |
+| Monthly summary report | JSON endpoint with per-patient aggregates and eligibility indicators |
+| Interaction audit trail | InteractionLog with timestamps, types, optional duration |
 
-**Next Slice Candidate**: Monthly aggregation summaries and time entry for billable interactions.
+### Billing API Endpoints (MVP)
+- `POST /clinician/patients/:patientId/time-entries` — Log billable time
+- `GET /clinician/patients/:patientId/time-entries` — List time entries
+- `GET /clinician/patients/:patientId/billing-summary` — Monthly summary for patient
+- `GET /clinician/clinic/:clinicId/billing-report` — Clinic-wide monthly report
+
+### Eligibility Thresholds (Display Only)
+| Code | Requirement | System Calculation |
+|------|-------------|-------------------|
+| 99454 | 16+ device days/month | `COUNT(DISTINCT DATE(timestamp)) WHERE source != 'manual'` |
+| 99457 | 20+ minutes clinical time | `SUM(durationMinutes) WHERE month = X` |
+| 99458 | Each additional 20 min | Same as above, display count of 20-min blocks |
+| 99490 | 20+ minutes CCM time | Same query, filtered by CCM activity types |
+
+### Phase 2 Scope (Future)
+- PDF report generation
+- Claims file export (837P format)
+- Automated time tracking via activity inference
+- EHR-based demographic sync
 
 ---
 
