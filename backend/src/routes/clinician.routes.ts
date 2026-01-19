@@ -68,6 +68,14 @@ import {
   labResultUpdateSchema,
 } from "../lib/validation.js";
 import { getDeviceConnections } from "../services/device.service.js";
+import {
+  createTimeEntry,
+  getTimeEntriesForPatient,
+  getTimeEntryById,
+  updateTimeEntry,
+  deleteTimeEntry,
+  getTimeEntrySummary,
+} from "../services/timeentry.service.js";
 
 const router = Router();
 
@@ -1503,6 +1511,218 @@ router.get("/audit-logs", async (req: Request, res: Response) => {
     res.json({ auditLogs: filteredLogs });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch audit logs" });
+  }
+});
+
+// ============================================
+// Time Entries (RPM/CCM Billing)
+// ============================================
+
+// POST /clinician/patients/:patientId/time-entries - Log billable time
+router.post("/patients/:patientId/time-entries", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+    const { clinicId, entryDate, durationMinutes, activity, notes } = req.body;
+
+    // Validate required fields
+    if (!clinicId) {
+      res.status(400).json({ error: "clinicId is required" });
+      return;
+    }
+    if (!entryDate) {
+      res.status(400).json({ error: "entryDate is required" });
+      return;
+    }
+    if (!durationMinutes || typeof durationMinutes !== "number") {
+      res.status(400).json({ error: "durationMinutes is required and must be a number" });
+      return;
+    }
+    if (!activity) {
+      res.status(400).json({ error: "activity is required" });
+      return;
+    }
+
+    // Validate activity enum
+    const validActivities = [
+      "PATIENT_REVIEW",
+      "CARE_PLAN_UPDATE",
+      "PHONE_CALL",
+      "COORDINATION",
+      "DOCUMENTATION",
+      "OTHER",
+    ];
+    if (!validActivities.includes(activity)) {
+      res.status(400).json({ error: `Invalid activity. Must be one of: ${validActivities.join(", ")}` });
+      return;
+    }
+
+    const timeEntry = await createTimeEntry({
+      patientId,
+      clinicianId,
+      clinicId,
+      entryDate: new Date(entryDate),
+      durationMinutes,
+      activity,
+      notes,
+    });
+
+    if (!timeEntry) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    res.status(201).json({ timeEntry });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to create time entry";
+    if (message.includes("Duration") || message.includes("Entry date")) {
+      res.status(400).json({ error: message });
+      return;
+    }
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to create time entry");
+    res.status(500).json({ error: "Failed to create time entry" });
+  }
+});
+
+// GET /clinician/patients/:patientId/time-entries - List time entries
+router.get("/patients/:patientId/time-entries", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+    const from = req.query.from ? new Date(req.query.from as string) : undefined;
+    const to = req.query.to ? new Date(req.query.to as string) : undefined;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const timeEntries = await getTimeEntriesForPatient(patientId, clinicianId, {
+      from,
+      to,
+      limit,
+      offset,
+    });
+
+    if (timeEntries === null) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    res.json({ timeEntries });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch time entries");
+    res.status(500).json({ error: "Failed to fetch time entries" });
+  }
+});
+
+// GET /clinician/patients/:patientId/time-entries/summary - Get time entry summary
+router.get("/patients/:patientId/time-entries/summary", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    // Default to last 30 days if not specified
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const from = req.query.from ? new Date(req.query.from as string) : thirtyDaysAgo;
+    const to = req.query.to ? new Date(req.query.to as string) : now;
+
+    const summary = await getTimeEntrySummary(patientId, clinicianId, from, to);
+
+    if (summary === null) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    res.json({ summary });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch time entry summary");
+    res.status(500).json({ error: "Failed to fetch time entry summary" });
+  }
+});
+
+// GET /clinician/time-entries/:id - Get single time entry
+router.get("/time-entries/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const timeEntry = await getTimeEntryById(id, clinicianId);
+
+    if (!timeEntry) {
+      res.status(404).json({ error: "Time entry not found" });
+      return;
+    }
+
+    res.json({ timeEntry });
+  } catch (error) {
+    logger.error({ err: error, timeEntryId: req.params.id }, "Failed to fetch time entry");
+    res.status(500).json({ error: "Failed to fetch time entry" });
+  }
+});
+
+// PUT /clinician/time-entries/:id - Update time entry (author only)
+router.put("/time-entries/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const clinicianId = req.user!.sub;
+    const { entryDate, durationMinutes, activity, notes } = req.body;
+
+    // Validate activity if provided
+    if (activity) {
+      const validActivities = [
+        "PATIENT_REVIEW",
+        "CARE_PLAN_UPDATE",
+        "PHONE_CALL",
+        "COORDINATION",
+        "DOCUMENTATION",
+        "OTHER",
+      ];
+      if (!validActivities.includes(activity)) {
+        res.status(400).json({ error: `Invalid activity. Must be one of: ${validActivities.join(", ")}` });
+        return;
+      }
+    }
+
+    const timeEntry = await updateTimeEntry(id, clinicianId, {
+      entryDate: entryDate ? new Date(entryDate) : undefined,
+      durationMinutes,
+      activity,
+      notes,
+    });
+
+    if (!timeEntry) {
+      res.status(404).json({ error: "Time entry not found or not authorized" });
+      return;
+    }
+
+    res.json({ timeEntry });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to update time entry";
+    if (message.includes("Duration") || message.includes("Entry date")) {
+      res.status(400).json({ error: message });
+      return;
+    }
+    logger.error({ err: error, timeEntryId: req.params.id }, "Failed to update time entry");
+    res.status(500).json({ error: "Failed to update time entry" });
+  }
+});
+
+// DELETE /clinician/time-entries/:id - Delete time entry (author only)
+router.delete("/time-entries/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const success = await deleteTimeEntry(id, clinicianId);
+
+    if (!success) {
+      res.status(404).json({ error: "Time entry not found or not authorized" });
+      return;
+    }
+
+    res.json({ success: true, message: "Time entry deleted" });
+  } catch (error) {
+    logger.error({ err: error, timeEntryId: req.params.id }, "Failed to delete time entry");
+    res.status(500).json({ error: "Failed to delete time entry" });
   }
 });
 

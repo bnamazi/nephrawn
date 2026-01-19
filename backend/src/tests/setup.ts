@@ -121,15 +121,21 @@ export async function cleanupTestData() {
   // Delete in order respecting foreign key constraints
   // Use $executeRaw for tables that might have complex dependencies
   await prisma.$executeRaw`DELETE FROM "interaction_logs"`;
+  await prisma.$executeRaw`DELETE FROM "audit_logs"`;
   await prisma.patientProfileAudit.deleteMany({});
   await prisma.carePlan.deleteMany({});
   await prisma.patientProfile.deleteMany({});
-  await prisma.alert.deleteMany({});
   await prisma.clinicianNote.deleteMany({});
+  await prisma.alert.deleteMany({});
   await prisma.symptomCheckin.deleteMany({});
   await prisma.measurement.deleteMany({});
   await prisma.medicationLog.deleteMany({});
   await prisma.medication.deleteMany({});
+  await prisma.timeEntry.deleteMany({});
+  await prisma.labResult.deleteMany({});
+  await prisma.labReport.deleteMany({});
+  await prisma.document.deleteMany({});
+  await prisma.deviceConnection.deleteMany({});
   await prisma.enrollment.deleteMany({});
   await prisma.invite.deleteMany({});
   await prisma.clinicMembership.deleteMany({});

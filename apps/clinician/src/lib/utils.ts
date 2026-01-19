@@ -56,3 +56,11 @@ export function formatRelativeTime(dateString: string): string {
 export function cn(...classes: (string | undefined | null | false)[]): string {
   return classes.filter(Boolean).join(' ');
 }
+
+/**
+ * Format distance to now (e.g., "2 hours ago")
+ * Alias for formatRelativeTime that accepts a Date object
+ */
+export function formatDistanceToNow(date: Date): string {
+  return formatRelativeTime(date.toISOString());
+}

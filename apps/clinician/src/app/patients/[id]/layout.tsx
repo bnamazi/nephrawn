@@ -23,6 +23,7 @@ const TABS = [
   { label: 'Care Plan', href: '/care-plan' },
   { label: 'Devices', href: '/devices' },
   { label: 'Notes', href: '/notes' },
+  { label: 'Time Log', href: '/time-log' },
 ];
 
 export default function PatientLayout({ children }: PatientLayoutProps) {

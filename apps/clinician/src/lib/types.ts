@@ -640,3 +640,59 @@ export const CKD_ANALYTES = [
   { name: 'PTH', unit: 'pg/mL', code: '2731-8' },
   { name: 'ACR', unit: 'mg/g', code: '13705-9' },
 ] as const;
+
+// ============================================
+// Time Entry Types (Billing)
+// ============================================
+
+export type TimeEntryActivity =
+  | 'PATIENT_REVIEW'
+  | 'CARE_PLAN_UPDATE'
+  | 'PHONE_CALL'
+  | 'COORDINATION'
+  | 'DOCUMENTATION'
+  | 'OTHER';
+
+export interface TimeEntry {
+  id: string;
+  patientId: string;
+  clinicianId: string;
+  clinicId: string;
+  entryDate: string;
+  durationMinutes: number;
+  activity: TimeEntryActivity;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  patient?: { id: string; name: string };
+  clinician: { id: string; name: string };
+}
+
+export interface TimeEntriesResponse {
+  timeEntries: TimeEntry[];
+}
+
+export interface TimeEntryResponse {
+  timeEntry: TimeEntry;
+}
+
+export interface TimeEntrySummary {
+  totalMinutes: number;
+  entryCount: number;
+  byActivity: Record<TimeEntryActivity, number>;
+  byClinician: Record<string, number>;
+  period: { from: string; to: string };
+}
+
+export interface TimeEntrySummaryResponse {
+  summary: TimeEntrySummary;
+}
+
+export const TIME_ENTRY_ACTIVITY_LABELS: Record<TimeEntryActivity, string> = {
+  PATIENT_REVIEW: 'Patient Review',
+  CARE_PLAN_UPDATE: 'Care Plan Update',
+  PHONE_CALL: 'Phone Call',
+  COORDINATION: 'Care Coordination',
+  DOCUMENTATION: 'Documentation',
+  OTHER: 'Other',
+};
