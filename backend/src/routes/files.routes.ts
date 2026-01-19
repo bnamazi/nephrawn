@@ -3,6 +3,7 @@ import { createReadStream, existsSync, statSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { mkdirSync } from "fs";
 import { LocalStorageAdapter, getStorageAdapter } from "../adapters/local-storage.adapter.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -55,7 +56,7 @@ router.get("/*splat", async (req: Request, res: Response) => {
     const stream = createReadStream(filePath);
     stream.pipe(res);
   } catch (error) {
-    console.error("Error serving file:", error);
+    logger.error({ err: error }, "Error serving file");
     res.status(500).json({ error: "Failed to serve file" });
   }
 });
@@ -114,11 +115,11 @@ router.put("/*splat", async (req: Request, res: Response) => {
     });
 
     req.on("error", (error) => {
-      console.error("Error receiving upload:", error);
+      logger.error({ err: error }, "Error receiving upload");
       res.status(500).json({ error: "Failed to receive upload" });
     });
   } catch (error) {
-    console.error("Error handling upload:", error);
+    logger.error({ err: error }, "Error handling upload");
     res.status(500).json({ error: "Failed to handle upload" });
   }
 });

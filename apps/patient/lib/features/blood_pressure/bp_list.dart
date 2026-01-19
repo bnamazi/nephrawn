@@ -46,7 +46,7 @@ class _BPListItem extends StatelessWidget {
       return Colors.green;
     } else if (reading.systolic < 130 && reading.diastolic < 80) {
       return Colors.amber;
-    } else if (reading.systolic < 140 || reading.diastolic < 90) {
+    } else if (reading.systolic < 140 && reading.diastolic < 90) {
       return Colors.orange;
     } else {
       return Colors.red;
