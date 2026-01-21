@@ -173,6 +173,8 @@ model Enrollment {
   inviteId     String?          // FK to Invite if enrolled via invite
   enrolledAt   DateTime         @default(now())
   dischargedAt DateTime?
+  // RPM billing: 99453 is one-time initial setup per enrollment
+  initialSetupBilledAt DateTime? // Date when 99453 was billed (null = not yet billed)
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 

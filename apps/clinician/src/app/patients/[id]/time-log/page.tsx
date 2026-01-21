@@ -13,6 +13,9 @@ import {
   TimeEntrySummaryResponse,
   TimeEntryActivity,
   TIME_ENTRY_ACTIVITY_LABELS,
+  PatientBillingSummary,
+  PatientBillingSummaryResponse,
+  CPT_CODE_LABELS,
 } from '@/lib/types';
 import TimeEntryCard from '@/components/TimeEntryCard';
 import TimeEntryForm from '@/components/TimeEntryForm';
@@ -28,6 +31,7 @@ export default function TimeLogPage() {
 
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [summary, setSummary] = useState<TimeEntrySummaryResponse['summary'] | null>(null);
+  const [billingSummary, setBillingSummary] = useState<PatientBillingSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -37,12 +41,14 @@ export default function TimeLogPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [entriesRes, summaryRes] = await Promise.all([
+      const [entriesRes, summaryRes, billingRes] = await Promise.all([
         api.get<TimeEntriesResponse>(`/clinician/patients/${patientId}/time-entries`),
         api.get<TimeEntrySummaryResponse>(`/clinician/patients/${patientId}/time-entries/summary`),
+        api.get<PatientBillingSummaryResponse>(`/clinician/patients/${patientId}/billing-summary`),
       ]);
       setEntries(entriesRes.timeEntries);
       setSummary(summaryRes.summary);
+      setBillingSummary(billingRes.summary);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         router.push('/login');
@@ -88,11 +94,13 @@ export default function TimeLogPage() {
       setEntries((prev) => [response.timeEntry, ...prev]);
       setShowForm(false);
       showToast('Time entry logged successfully', 'success');
-      // Refresh summary
-      const summaryRes = await api.get<TimeEntrySummaryResponse>(
-        `/clinician/patients/${patientId}/time-entries/summary`
-      );
+      // Refresh summaries
+      const [summaryRes, billingRes] = await Promise.all([
+        api.get<TimeEntrySummaryResponse>(`/clinician/patients/${patientId}/time-entries/summary`),
+        api.get<PatientBillingSummaryResponse>(`/clinician/patients/${patientId}/billing-summary`),
+      ]);
       setSummary(summaryRes.summary);
+      setBillingSummary(billingRes.summary);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create time entry';
       showToast(message, 'error');
@@ -112,11 +120,13 @@ export default function TimeLogPage() {
         prev.map((entry) => (entry.id === entryId ? response.timeEntry : entry))
       );
       showToast('Time entry updated', 'success');
-      // Refresh summary
-      const summaryRes = await api.get<TimeEntrySummaryResponse>(
-        `/clinician/patients/${patientId}/time-entries/summary`
-      );
+      // Refresh summaries
+      const [summaryRes, billingRes] = await Promise.all([
+        api.get<TimeEntrySummaryResponse>(`/clinician/patients/${patientId}/time-entries/summary`),
+        api.get<PatientBillingSummaryResponse>(`/clinician/patients/${patientId}/billing-summary`),
+      ]);
       setSummary(summaryRes.summary);
+      setBillingSummary(billingRes.summary);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to update time entry', 'error');
       throw err;
@@ -128,11 +138,13 @@ export default function TimeLogPage() {
       await api.delete(`/clinician/time-entries/${entryId}`);
       setEntries((prev) => prev.filter((entry) => entry.id !== entryId));
       showToast('Time entry deleted', 'success');
-      // Refresh summary
-      const summaryRes = await api.get<TimeEntrySummaryResponse>(
-        `/clinician/patients/${patientId}/time-entries/summary`
-      );
+      // Refresh summaries
+      const [summaryRes, billingRes] = await Promise.all([
+        api.get<TimeEntrySummaryResponse>(`/clinician/patients/${patientId}/time-entries/summary`),
+        api.get<PatientBillingSummaryResponse>(`/clinician/patients/${patientId}/billing-summary`),
+      ]);
       setSummary(summaryRes.summary);
+      setBillingSummary(billingRes.summary);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to delete time entry', 'error');
       throw err;
@@ -211,34 +223,64 @@ export default function TimeLogPage() {
         )}
       </div>
 
-      {/* Summary Card */}
-      {summary && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <h3 className="text-sm font-medium text-blue-900 mb-3">Last 30 Days Summary</h3>
+      {/* Billing Summary Card */}
+      {billingSummary && (
+        <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-gray-900">Monthly Billing Summary</h3>
+            <span className="text-xs text-gray-500">
+              {new Date(billingSummary.period.from).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(billingSummary.period.to).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
+          </div>
+
+          {/* CPT Eligibility Badges */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {['99453', '99445', '99454', '99470', '99457', '99458', '99490'].map((code) => {
+              const isEligible = billingSummary.eligibleCodes.includes(code);
+              const count = billingSummary.eligibleCodes.filter((c) => c === code).length;
+              return (
+                <div
+                  key={code}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${
+                    isEligible
+                      ? 'bg-green-100 text-green-800 border border-green-200'
+                      : 'bg-gray-100 text-gray-500 border border-gray-200'
+                  }`}
+                >
+                  {isEligible && (
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                  {code}{count > 1 ? ` x${count}` : ''}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Metrics Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <p className="text-2xl font-bold text-blue-900">{summary.totalMinutes}</p>
-              <p className="text-xs text-blue-700">Total Minutes</p>
+            <div className="bg-white/50 rounded-lg p-3">
+              <p className="text-2xl font-bold text-gray-900">{billingSummary.deviceTransmission.totalDays}</p>
+              <p className="text-xs text-gray-600">Device Days</p>
+              <p className="text-xs text-gray-400 mt-1">2+ for 99445, 16+ for 99454</p>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-blue-900">{summary.entryCount}</p>
-              <p className="text-xs text-blue-700">Entries</p>
+            <div className="bg-white/50 rounded-lg p-3">
+              <p className="text-2xl font-bold text-gray-900">{billingSummary.time.rpmMinutes}</p>
+              <p className="text-xs text-gray-600">RPM Minutes</p>
+              <p className="text-xs text-gray-400 mt-1">10+ for 99470, 20+ for 99457</p>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-blue-900">
-                {Math.floor(summary.totalMinutes / 60)}h {summary.totalMinutes % 60}m
+            <div className="bg-white/50 rounded-lg p-3">
+              <p className="text-2xl font-bold text-gray-900">{billingSummary.time.ccmMinutes}</p>
+              <p className="text-xs text-gray-600">CCM Minutes</p>
+              <p className="text-xs text-gray-400 mt-1">20+ for 99490</p>
+            </div>
+            <div className="bg-white/50 rounded-lg p-3">
+              <p className="text-2xl font-bold text-gray-900">{summary?.entryCount || 0}</p>
+              <p className="text-xs text-gray-600">Time Entries</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {Math.floor((billingSummary.time.totalMinutes || 0) / 60)}h {(billingSummary.time.totalMinutes || 0) % 60}m logged
               </p>
-              <p className="text-xs text-blue-700">Time Logged</p>
-            </div>
-            <div>
-              <p className="text-sm text-blue-700">
-                {Object.entries(summary.byActivity)
-                  .filter(([, mins]) => mins > 0)
-                  .slice(0, 2)
-                  .map(([act, mins]) => `${TIME_ENTRY_ACTIVITY_LABELS[act as TimeEntryActivity]}: ${mins}m`)
-                  .join(', ')}
-              </p>
-              <p className="text-xs text-blue-700">By Activity</p>
             </div>
           </div>
         </div>

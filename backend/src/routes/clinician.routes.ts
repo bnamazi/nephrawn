@@ -76,6 +76,10 @@ import {
   deleteTimeEntry,
   getTimeEntrySummary,
 } from "../services/timeentry.service.js";
+import {
+  getPatientBillingSummary,
+  getClinicBillingReport,
+} from "../services/billing.service.js";
 
 const router = Router();
 
@@ -1723,6 +1727,68 @@ router.delete("/time-entries/:id", async (req: Request, res: Response) => {
   } catch (error) {
     logger.error({ err: error, timeEntryId: req.params.id }, "Failed to delete time entry");
     res.status(500).json({ error: "Failed to delete time entry" });
+  }
+});
+
+// ============================================
+// Billing Reports (RPM/CCM)
+// ============================================
+
+// Helper to get default billing period (current month)
+function getDefaultBillingPeriod() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  return { from, to };
+}
+
+// GET /clinician/patients/:patientId/billing-summary - Get patient billing summary
+router.get("/patients/:patientId/billing-summary", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    // Parse date range or use current month
+    const { from: defaultFrom, to: defaultTo } = getDefaultBillingPeriod();
+    const from = req.query.from ? new Date(req.query.from as string) : defaultFrom;
+    const to = req.query.to ? new Date(req.query.to as string) : defaultTo;
+
+    const summary = await getPatientBillingSummary(patientId, clinicianId, from, to);
+
+    if (!summary) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    res.json({ summary });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch billing summary");
+    res.status(500).json({ error: "Failed to fetch billing summary" });
+  }
+});
+
+// GET /clinician/clinics/:clinicId/billing-report - Get clinic-wide billing report
+router.get("/clinics/:clinicId/billing-report", async (req: Request, res: Response) => {
+  try {
+    const { clinicId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    // Parse date range or use current month
+    const { from: defaultFrom, to: defaultTo } = getDefaultBillingPeriod();
+    const from = req.query.from ? new Date(req.query.from as string) : defaultFrom;
+    const to = req.query.to ? new Date(req.query.to as string) : defaultTo;
+
+    const report = await getClinicBillingReport(clinicId, clinicianId, from, to);
+
+    if (!report) {
+      res.status(403).json({ error: "Not authorized - requires OWNER or ADMIN role in this clinic" });
+      return;
+    }
+
+    res.json({ report });
+  } catch (error) {
+    logger.error({ err: error, clinicId: req.params.clinicId }, "Failed to fetch billing report");
+    res.status(500).json({ error: "Failed to fetch billing report" });
   }
 });
 

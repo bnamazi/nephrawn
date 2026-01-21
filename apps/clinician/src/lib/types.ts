@@ -688,11 +688,90 @@ export interface TimeEntrySummaryResponse {
   summary: TimeEntrySummary;
 }
 
+// Activity labels with CPT codes - RPM and CCM are mutually exclusive (no double-counting)
 export const TIME_ENTRY_ACTIVITY_LABELS: Record<TimeEntryActivity, string> = {
-  PATIENT_REVIEW: 'Patient Review',
-  CARE_PLAN_UPDATE: 'Care Plan Update',
-  PHONE_CALL: 'Phone Call',
-  COORDINATION: 'Care Coordination',
-  DOCUMENTATION: 'Documentation',
-  OTHER: 'Other',
+  PATIENT_REVIEW: 'Patient/Data Review (RPM: 99457/99470)',
+  DOCUMENTATION: 'Documentation (RPM: 99457/99470)',
+  OTHER: 'Other RPM Activity (RPM: 99457/99470)',
+  CARE_PLAN_UPDATE: 'Care Plan Update (CCM: 99490)',
+  PHONE_CALL: 'Phone Call (CCM: 99490)',
+  COORDINATION: 'Care Coordination (CCM: 99490)',
+};
+
+// ============================================
+// Billing Summary Types (CPT Eligibility)
+// ============================================
+
+export interface DeviceTransmissionSummary {
+  totalDays: number;
+  dates: string[];
+  eligible99445: boolean; // 2-15 days (new 2026 code)
+  eligible99454: boolean; // 16+ days
+}
+
+export interface BillingTimeSummary {
+  totalMinutes: number;
+  byActivity: Partial<Record<TimeEntryActivity, number>>;
+  rpmMinutes: number; // RPM activities only (Patient Review, Documentation, Other)
+  ccmMinutes: number; // CCM activities only (Care Plan, Phone Call, Coordination)
+  eligible99470: boolean; // 10-19 RPM min (new 2026 code)
+  eligible99457: boolean; // 20+ RPM min
+  eligible99458Count: number; // max 2 per month
+  eligible99490: boolean; // 20+ CCM min
+}
+
+export interface InitialSetupSummary {
+  eligible99453: boolean; // Can bill 99453 (first time 16+ device days achieved)
+  alreadyBilled: boolean; // 99453 was already billed for this enrollment
+  billedAt: string | null; // When it was billed
+}
+
+export interface PatientBillingSummary {
+  patientId: string;
+  patientName: string;
+  period: { from: string; to: string };
+  deviceTransmission: DeviceTransmissionSummary;
+  time: BillingTimeSummary;
+  initialSetup: InitialSetupSummary;
+  eligibleCodes: string[];
+}
+
+export interface PatientBillingSummaryResponse {
+  summary: PatientBillingSummary;
+}
+
+export interface ClinicBillingSummary {
+  totalPatients: number;
+  patientsWithDeviceData: number;
+  patientsWith99453: number; // Initial setup eligible (one-time)
+  patientsWith99445: number; // 2-15 device days (new 2026)
+  patientsWith99454: number; // 16+ device days
+  patientsWith99470: number; // 10-19 RPM min (new 2026)
+  patientsWith99457: number; // 20+ RPM min
+  patientsWith99490: number; // 20+ CCM min
+  totalRpmMinutes: number;
+  totalCcmMinutes: number;
+}
+
+export interface ClinicBillingReport {
+  clinicId: string;
+  clinicName: string;
+  period: { from: string; to: string };
+  summary: ClinicBillingSummary;
+  patients: PatientBillingSummary[];
+}
+
+export interface ClinicBillingReportResponse {
+  report: ClinicBillingReport;
+}
+
+// CPT Code labels (2026 CMS rules)
+export const CPT_CODE_LABELS: Record<string, string> = {
+  '99453': 'Initial Setup & Education (one-time)',
+  '99445': 'Device Supply (2-15 days)',
+  '99454': 'Device Supply (16+ days)',
+  '99470': 'RPM Time (10-19 min)',
+  '99457': 'RPM Time (20+ min)',
+  '99458': 'RPM Additional 20-min (max 2)',
+  '99490': 'CCM Time (20+ min)',
 };

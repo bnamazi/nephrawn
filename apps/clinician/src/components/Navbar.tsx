@@ -163,6 +163,7 @@ function ClinicSwitcher() {
 export default function Navbar() {
   const pathname = usePathname();
   const { user, isAuthenticated, logout } = useAuth();
+  const { selectedClinic } = useClinic();
   const [openAlertCount, setOpenAlertCount] = useState(0);
 
   useEffect(() => {
@@ -183,10 +184,13 @@ export default function Navbar() {
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
+  const isOwnerOrAdmin = selectedClinic?.role === 'OWNER' || selectedClinic?.role === 'ADMIN';
+
   const navLinks = [
     { href: '/patients', label: 'Patients' },
     { href: '/invites', label: 'Invites' },
     { href: '/alerts', label: 'Alerts', badge: openAlertCount },
+    ...(isOwnerOrAdmin ? [{ href: '/clinic/billing', label: 'Billing' }] : []),
   ];
 
   return (
