@@ -82,7 +82,6 @@ nephrawn/
 - Node.js 18+
 - PostgreSQL 14+
 - Flutter 3.x (for patient app)
-- pnpm (recommended) or npm
 
 ### Backend Setup
 
@@ -90,20 +89,20 @@ nephrawn/
 cd backend
 
 # Install dependencies
-pnpm install
+npm install
 
 # Set up environment
 cp .env.example .env
 # Edit .env with your database URL and JWT secret
 
 # Run migrations
-pnpm prisma migrate dev
+npx prisma migrate dev
 
-# Seed demo data
-pnpm prisma db seed
+# Seed demo data (creates patients, clinicians, measurements, alerts, time entries, etc.)
+npx prisma db seed
 
 # Start development server
-pnpm dev
+npm run dev
 ```
 
 The backend runs on `http://localhost:3000`.
@@ -114,10 +113,10 @@ The backend runs on `http://localhost:3000`.
 cd apps/clinician
 
 # Install dependencies
-pnpm install
+npm install
 
 # Start development server
-pnpm dev
+npm run dev
 ```
 
 The clinician app runs on `http://localhost:3001`.

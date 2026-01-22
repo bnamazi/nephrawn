@@ -775,3 +775,22 @@ export const CPT_CODE_LABELS: Record<string, string> = {
   '99458': 'RPM Additional 20-min (max 2)',
   '99490': 'CCM Time (20+ min)',
 };
+
+// ============================================
+// Notification Preferences
+// ============================================
+
+export interface NotificationPreference {
+  id: string;
+  clinicianId: string;
+  emailEnabled: boolean;
+  notifyOnCritical: boolean;
+  notifyOnWarning: boolean;
+  notifyOnInfo: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationPreferenceResponse {
+  preferences: NotificationPreference;
+}

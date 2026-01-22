@@ -122,6 +122,8 @@ export async function cleanupTestData() {
   // Use $executeRaw for tables that might have complex dependencies
   await prisma.$executeRaw`DELETE FROM "interaction_logs"`;
   await prisma.$executeRaw`DELETE FROM "audit_logs"`;
+  await prisma.$executeRaw`DELETE FROM "notification_logs"`;
+  await prisma.notificationPreference.deleteMany({});
   await prisma.patientProfileAudit.deleteMany({});
   await prisma.carePlan.deleteMany({});
   await prisma.patientProfile.deleteMany({});

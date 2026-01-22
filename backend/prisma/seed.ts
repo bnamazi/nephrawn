@@ -729,6 +729,374 @@ async function main() {
 
   console.log("Created lab reports:", labReport1.id, labReport2.id, labReport3.id, labReport4.id, labReport5.id);
 
+  // ============================================
+  // Measurements (past 30 days)
+  // ============================================
+  const now = new Date();
+
+  // Helper to create date X days ago
+  const daysAgo = (days: number) => {
+    const date = new Date(now);
+    date.setDate(date.getDate() - days);
+    return date;
+  };
+
+  // Patient 1 (John Smith) - CKD Stage 4, showing weight gain trend (concerning)
+  const patient1Measurements = [];
+  for (let day = 30; day >= 0; day -= 2) {
+    const baseWeight = 85 + (30 - day) * 0.15; // Gradual weight gain
+    patient1Measurements.push(
+      { type: "WEIGHT", value: baseWeight + Math.random() * 0.5, unit: "kg", timestamp: daysAgo(day), source: "withings" },
+      { type: "BP_SYSTOLIC", value: 135 + Math.floor(Math.random() * 15), unit: "mmHg", timestamp: daysAgo(day), source: "withings" },
+      { type: "BP_DIASTOLIC", value: 82 + Math.floor(Math.random() * 10), unit: "mmHg", timestamp: daysAgo(day), source: "withings" },
+      { type: "HEART_RATE", value: 72 + Math.floor(Math.random() * 12), unit: "bpm", timestamp: daysAgo(day), source: "withings" },
+      { type: "SPO2", value: 95 + Math.floor(Math.random() * 3), unit: "%", timestamp: daysAgo(day), source: "manual" }
+    );
+  }
+
+  for (const m of patient1Measurements) {
+    await prisma.measurement.create({
+      data: { patientId: patient1.id, ...m },
+    });
+  }
+
+  // Patient 2 (Mary Johnson) - CKD Stage 3B, stable
+  const patient2Measurements = [];
+  for (let day = 28; day >= 0; day -= 3) {
+    patient2Measurements.push(
+      { type: "WEIGHT", value: 68 + Math.random() * 0.8 - 0.4, unit: "kg", timestamp: daysAgo(day), source: "withings" },
+      { type: "BP_SYSTOLIC", value: 125 + Math.floor(Math.random() * 10), unit: "mmHg", timestamp: daysAgo(day), source: "withings" },
+      { type: "BP_DIASTOLIC", value: 78 + Math.floor(Math.random() * 8), unit: "mmHg", timestamp: daysAgo(day), source: "withings" },
+      { type: "HEART_RATE", value: 68 + Math.floor(Math.random() * 10), unit: "bpm", timestamp: daysAgo(day), source: "withings" }
+    );
+  }
+
+  for (const m of patient2Measurements) {
+    await prisma.measurement.create({
+      data: { patientId: patient2.id, ...m },
+    });
+  }
+
+  // Patient 4 (Patricia Brown) - HD patient, more variable readings
+  const patient4Measurements = [];
+  for (let day = 21; day >= 0; day -= 1) {
+    // HD patients have more weight variation (pre/post dialysis)
+    const isDialysisDay = day % 2 === 0;
+    const weightVariation = isDialysisDay ? -2 : 1.5;
+    patient4Measurements.push(
+      { type: "WEIGHT", value: 58.5 + weightVariation + Math.random(), unit: "kg", timestamp: daysAgo(day), source: "withings" },
+      { type: "BP_SYSTOLIC", value: 145 + Math.floor(Math.random() * 20) - 10, unit: "mmHg", timestamp: daysAgo(day), source: "withings" },
+      { type: "BP_DIASTOLIC", value: 88 + Math.floor(Math.random() * 12) - 6, unit: "mmHg", timestamp: daysAgo(day), source: "withings" },
+      { type: "HEART_RATE", value: 78 + Math.floor(Math.random() * 15), unit: "bpm", timestamp: daysAgo(day), source: "withings" }
+    );
+  }
+
+  for (const m of patient4Measurements) {
+    await prisma.measurement.create({
+      data: { patientId: patient4.id, ...m },
+    });
+  }
+
+  console.log("Created measurements for patients 1, 2, and 4");
+
+  // ============================================
+  // Symptom Check-ins
+  // ============================================
+
+  // Patient 1 - Worsening symptoms (edema, fatigue)
+  await prisma.symptomCheckin.createMany({
+    data: [
+      {
+        patientId: patient1.id,
+        timestamp: daysAgo(14),
+        symptoms: { edema: { severity: 1, location: "ankles" }, fatigue: { severity: 1 }, appetite: { level: 2 } },
+        notes: "Slight swelling noticed in the evening",
+      },
+      {
+        patientId: patient1.id,
+        timestamp: daysAgo(7),
+        symptoms: { edema: { severity: 2, location: "ankles and feet" }, fatigue: { severity: 2 }, shortnessOfBreath: { severity: 1, atRest: false }, appetite: { level: 2 } },
+        notes: "Swelling worse, feeling more tired than usual",
+      },
+      {
+        patientId: patient1.id,
+        timestamp: daysAgo(2),
+        symptoms: { edema: { severity: 2, location: "lower legs" }, fatigue: { severity: 2 }, shortnessOfBreath: { severity: 1, atRest: false }, appetite: { level: 1 } },
+        notes: "Swelling moving up legs, reduced appetite",
+      },
+    ],
+  });
+
+  // Patient 2 - Stable, minimal symptoms
+  await prisma.symptomCheckin.createMany({
+    data: [
+      {
+        patientId: patient2.id,
+        timestamp: daysAgo(10),
+        symptoms: { fatigue: { severity: 1 }, appetite: { level: 3 } },
+      },
+      {
+        patientId: patient2.id,
+        timestamp: daysAgo(3),
+        symptoms: { fatigue: { severity: 0 }, appetite: { level: 3 } },
+        notes: "Feeling good this week",
+      },
+    ],
+  });
+
+  // Patient 4 - HD patient with variable symptoms
+  await prisma.symptomCheckin.createMany({
+    data: [
+      {
+        patientId: patient4.id,
+        timestamp: daysAgo(12),
+        symptoms: { fatigue: { severity: 2 }, nausea: { severity: 1 }, appetite: { level: 1 } },
+        notes: "Tired after dialysis",
+      },
+      {
+        patientId: patient4.id,
+        timestamp: daysAgo(5),
+        symptoms: { fatigue: { severity: 3 }, shortnessOfBreath: { severity: 2, atRest: true }, edema: { severity: 1, location: "hands" } },
+        notes: "Very fatigued, some trouble breathing when lying down",
+      },
+      {
+        patientId: patient4.id,
+        timestamp: daysAgo(1),
+        symptoms: { fatigue: { severity: 2 }, appetite: { level: 2 } },
+        notes: "Feeling better after adjusting dialysis schedule",
+      },
+    ],
+  });
+
+  console.log("Created symptom check-ins");
+
+  // ============================================
+  // Alerts
+  // ============================================
+
+  // Patient 1 - Weight gain alert (CRITICAL)
+  await prisma.alert.create({
+    data: {
+      patientId: patient1.id,
+      triggeredAt: daysAgo(3),
+      ruleId: "weight_gain_48h",
+      ruleName: "Rapid Weight Gain",
+      severity: "CRITICAL",
+      status: "OPEN",
+      inputs: {
+        currentWeight: 87.5,
+        previousWeight: 85.2,
+        changeKg: 2.3,
+        windowHours: 48,
+        threshold: 2.0
+      },
+      summaryText: "Patient gained 2.3 kg in 48 hours, exceeding the 2.0 kg threshold. This may indicate fluid retention.",
+    },
+  });
+
+  // Patient 1 - BP alert (WARNING) - acknowledged
+  await prisma.alert.create({
+    data: {
+      patientId: patient1.id,
+      triggeredAt: daysAgo(7),
+      ruleId: "bp_elevated",
+      ruleName: "Elevated Blood Pressure",
+      severity: "WARNING",
+      status: "ACKNOWLEDGED",
+      acknowledgedBy: clinician1.id,
+      acknowledgedAt: daysAgo(6),
+      inputs: { systolic: 148, diastolic: 92, targetSystolicMax: 130, targetDiastolicMax: 80 },
+      summaryText: "Blood pressure 148/92 exceeds target range.",
+    },
+  });
+
+  // Patient 4 - Critical potassium (from labs)
+  await prisma.alert.create({
+    data: {
+      patientId: patient4.id,
+      triggeredAt: daysAgo(1),
+      ruleId: "lab_critical",
+      ruleName: "Critical Lab Value",
+      severity: "CRITICAL",
+      status: "OPEN",
+      inputs: { analyte: "Potassium", value: 5.9, unit: "mEq/L", referenceMax: 5.0 },
+      summaryText: "Critical potassium level of 5.9 mEq/L detected. Immediate review recommended.",
+    },
+  });
+
+  // Patient 4 - Symptom alert (WARNING)
+  await prisma.alert.create({
+    data: {
+      patientId: patient4.id,
+      triggeredAt: daysAgo(5),
+      ruleId: "symptom_worsening",
+      ruleName: "Worsening Symptoms",
+      severity: "WARNING",
+      status: "DISMISSED",
+      acknowledgedBy: clinician2.id,
+      acknowledgedAt: daysAgo(4),
+      inputs: { symptoms: ["fatigue", "shortnessOfBreath"], severityIncrease: true },
+      summaryText: "Patient reported worsening fatigue (severe) and shortness of breath at rest.",
+    },
+  });
+
+  console.log("Created alerts");
+
+  // ============================================
+  // Time Entries (RPM/CCM billing)
+  // ============================================
+
+  // Clinician 1 - Time entries for Patient 1
+  await prisma.timeEntry.createMany({
+    data: [
+      {
+        patientId: patient1.id,
+        clinicianId: clinician1.id,
+        clinicId: clinic.id,
+        entryDate: daysAgo(10),
+        durationMinutes: 15,
+        activity: "PATIENT_REVIEW",
+        notes: "Reviewed weight trend and BP readings",
+      },
+      {
+        patientId: patient1.id,
+        clinicianId: clinician1.id,
+        clinicId: clinic.id,
+        entryDate: daysAgo(7),
+        durationMinutes: 20,
+        activity: "PHONE_CALL",
+        notes: "Called patient about elevated BP, discussed medication adherence",
+      },
+      {
+        patientId: patient1.id,
+        clinicianId: clinician1.id,
+        clinicId: clinic.id,
+        entryDate: daysAgo(3),
+        durationMinutes: 10,
+        activity: "PATIENT_REVIEW",
+        notes: "Reviewed critical weight gain alert",
+      },
+      {
+        patientId: patient1.id,
+        clinicianId: clinician1.id,
+        clinicId: clinic.id,
+        entryDate: daysAgo(2),
+        durationMinutes: 25,
+        activity: "CARE_PLAN_UPDATE",
+        notes: "Updated fluid restriction guidance, adjusted diuretic timing",
+      },
+      {
+        patientId: patient1.id,
+        clinicianId: clinician1.id,
+        clinicId: clinic.id,
+        entryDate: daysAgo(1),
+        durationMinutes: 15,
+        activity: "COORDINATION",
+        notes: "Coordinated with nephrology for urgent follow-up",
+      },
+    ],
+  });
+
+  // Clinician 1 - Time entries for Patient 2
+  await prisma.timeEntry.createMany({
+    data: [
+      {
+        patientId: patient2.id,
+        clinicianId: clinician1.id,
+        clinicId: clinic.id,
+        entryDate: daysAgo(14),
+        durationMinutes: 10,
+        activity: "PATIENT_REVIEW",
+        notes: "Routine review - all metrics stable",
+      },
+      {
+        patientId: patient2.id,
+        clinicianId: clinician1.id,
+        clinicId: clinic.id,
+        entryDate: daysAgo(5),
+        durationMinutes: 15,
+        activity: "DOCUMENTATION",
+        notes: "Updated care documentation for quarterly review",
+      },
+    ],
+  });
+
+  // Clinician 2 - Time entries for Patient 4
+  await prisma.timeEntry.createMany({
+    data: [
+      {
+        patientId: patient4.id,
+        clinicianId: clinician2.id,
+        clinicId: clinic.id,
+        entryDate: daysAgo(12),
+        durationMinutes: 20,
+        activity: "PATIENT_REVIEW",
+        notes: "Post-dialysis review, patient reporting fatigue",
+      },
+      {
+        patientId: patient4.id,
+        clinicianId: clinician2.id,
+        clinicId: clinic.id,
+        entryDate: daysAgo(6),
+        durationMinutes: 30,
+        activity: "PHONE_CALL",
+        notes: "Called patient about worsening symptoms, recommended dialysis schedule adjustment",
+      },
+      {
+        patientId: patient4.id,
+        clinicianId: clinician2.id,
+        clinicId: clinic.id,
+        entryDate: daysAgo(5),
+        durationMinutes: 15,
+        activity: "COORDINATION",
+        notes: "Coordinated with dialysis center about schedule change",
+      },
+      {
+        patientId: patient4.id,
+        clinicianId: clinician2.id,
+        clinicId: clinic.id,
+        entryDate: daysAgo(1),
+        durationMinutes: 10,
+        activity: "PATIENT_REVIEW",
+        notes: "Reviewed critical potassium alert from recent labs",
+      },
+    ],
+  });
+
+  console.log("Created time entries");
+
+  // ============================================
+  // Clinician Notes
+  // ============================================
+
+  // Get the weight gain alert for linking
+  const weightAlert = await prisma.alert.findFirst({
+    where: { patientId: patient1.id, ruleId: "weight_gain_48h" },
+  });
+
+  await prisma.clinicianNote.createMany({
+    data: [
+      {
+        patientId: patient1.id,
+        clinicianId: clinician1.id,
+        alertId: weightAlert?.id,
+        content: "Patient shows concerning weight gain pattern. Will increase monitoring frequency and consider diuretic adjustment if trend continues.",
+      },
+      {
+        patientId: patient1.id,
+        clinicianId: clinician1.id,
+        content: "Discussed dietary sodium intake with patient. Provided educational materials on fluid management.",
+      },
+      {
+        patientId: patient4.id,
+        clinicianId: clinician2.id,
+        content: "Adjusted dialysis schedule from MWF to TThS to better accommodate patient work schedule. Will monitor for improved symptom control.",
+      },
+    ],
+  });
+
+  console.log("Created clinician notes");
+
   console.log("\n--- Test Credentials ---");
   console.log("Clinician 1: clinician1@test.com / password123");
   console.log("Clinician 2: clinician2@test.com / password123");

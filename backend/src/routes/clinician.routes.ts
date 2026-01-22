@@ -80,6 +80,8 @@ import {
   getPatientBillingSummary,
   getClinicBillingReport,
 } from "../services/billing.service.js";
+import * as notificationService from "../services/notification.service.js";
+import { notificationPreferencesSchema } from "../lib/validation.js";
 
 const router = Router();
 
@@ -1789,6 +1791,39 @@ router.get("/clinics/:clinicId/billing-report", async (req: Request, res: Respon
   } catch (error) {
     logger.error({ err: error, clinicId: req.params.clinicId }, "Failed to fetch billing report");
     res.status(500).json({ error: "Failed to fetch billing report" });
+  }
+});
+
+// ============================================
+// Notification Preferences
+// ============================================
+
+router.get("/notifications/preferences", async (req: Request, res: Response) => {
+  try {
+    const clinicianId = req.user!.sub;
+    const preferences = await notificationService.getPreferences(clinicianId);
+    res.json({ preferences });
+  } catch (error) {
+    logger.error({ err: error }, "Failed to fetch notification preferences");
+    res.status(500).json({ error: "Failed to fetch notification preferences" });
+  }
+});
+
+router.put("/notifications/preferences", async (req: Request, res: Response) => {
+  try {
+    const clinicianId = req.user!.sub;
+    const parsed = notificationPreferencesSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", details: parsed.error.issues });
+      return;
+    }
+
+    const preferences = await notificationService.updatePreferences(clinicianId, parsed.data);
+    res.json({ preferences });
+  } catch (error) {
+    logger.error({ err: error }, "Failed to update notification preferences");
+    res.status(500).json({ error: "Failed to update notification preferences" });
   }
 });
 

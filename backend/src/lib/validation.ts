@@ -244,3 +244,13 @@ export type LabResultDto = z.infer<typeof labResultSchema>;
 export type LabReportDto = z.infer<typeof labReportSchema>;
 export type LabReportUpdateDto = z.infer<typeof labReportUpdateSchema>;
 export type LabResultUpdateDto = z.infer<typeof labResultUpdateSchema>;
+
+// Notification Preferences
+export const notificationPreferencesSchema = z.object({
+  emailEnabled: z.boolean().optional(),
+  notifyOnCritical: z.boolean().optional(),
+  notifyOnWarning: z.boolean().optional(),
+  notifyOnInfo: z.boolean().optional(),
+});
+
+export type NotificationPreferencesDto = z.infer<typeof notificationPreferencesSchema>;
