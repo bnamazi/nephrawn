@@ -94,6 +94,11 @@ export const config = {
     scopes: "user.metrics", // Weight, BP, body composition
     mock: getWithingsMock(),
   },
+  email: {
+    resendApiKey: process.env.RESEND_API_KEY || "",
+    fromAddress: process.env.EMAIL_FROM || "alerts@nephrawn.com",
+    clinicianDashboardUrl: process.env.CLINICIAN_DASHBOARD_URL || "http://localhost:3001",
+  },
   nodeEnv,
   isProduction,
 };

@@ -167,6 +167,7 @@ export interface Alert {
   summaryText?: string;
   acknowledgedBy?: string;
   acknowledgedAt?: string;
+  lastNotifiedAt?: string;
   patient: {
     id: string;
     name: string;

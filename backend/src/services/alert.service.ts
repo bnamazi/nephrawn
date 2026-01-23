@@ -2,6 +2,7 @@ import { AlertSeverity, AlertStatus, MeasurementType, Prisma } from "@prisma/cli
 import { prisma } from "../lib/prisma.js";
 import { ALERT_THRESHOLDS } from "../lib/units.js";
 import { logger } from "../lib/logger.js";
+import { notifyOnAlert } from "./notification.service.js";
 
 // ============================================
 // Alert Rule Definitions
@@ -228,7 +229,7 @@ export async function evaluateRulesAtomic(
             });
           } else {
             // Create new alert
-            await tx.alert.create({
+            const newAlert = await tx.alert.create({
               data: {
                 patientId,
                 ruleId: rule.id,
@@ -236,6 +237,14 @@ export async function evaluateRulesAtomic(
                 severity: trigger.severity,
                 inputs: trigger.inputs as Prisma.InputJsonValue,
               },
+            });
+
+            // Fire-and-forget notification (don't block measurement creation)
+            notifyOnAlert(newAlert).catch(err => {
+              logger.error(
+                { err, alertId: newAlert.id },
+                "Failed to send alert notification"
+              );
             });
           }
         });

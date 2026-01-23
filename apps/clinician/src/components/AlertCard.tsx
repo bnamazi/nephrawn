@@ -117,6 +117,14 @@ export default function AlertCard({ alert, onAcknowledge, onDismiss }: AlertCard
               <AlertBadge severity={alert.severity} />
               {alert.status !== 'OPEN' && <AlertBadge status={alert.status} />}
               <span className="font-medium text-gray-900">{alert.ruleName}</span>
+              {alert.lastNotifiedAt && (
+                <span className="inline-flex items-center gap-1 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Notified
+                </span>
+              )}
             </div>
             <p className="mt-1 text-sm text-gray-600">{alert.patient.name}</p>
             {summary && <p className="mt-1 text-sm text-gray-500">{summary}</p>}
@@ -156,6 +164,11 @@ export default function AlertCard({ alert, onAcknowledge, onDismiss }: AlertCard
 
             <div className="text-xs text-gray-500 space-y-1">
               <p>Triggered: {formatDate(alert.triggeredAt)}</p>
+              {alert.lastNotifiedAt && (
+                <p className="text-green-600">
+                  Email sent: {formatDate(alert.lastNotifiedAt)}
+                </p>
+              )}
               {alert.clinician && alert.acknowledgedAt && (
                 <>
                   <p>
