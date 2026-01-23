@@ -874,7 +874,7 @@ async function main() {
   // Alerts
   // ============================================
 
-  // Patient 1 - Weight gain alert (CRITICAL)
+  // Patient 1 - Weight gain alert (CRITICAL) - notified
   await prisma.alert.create({
     data: {
       patientId: patient1.id,
@@ -891,6 +891,7 @@ async function main() {
         threshold: 2.0
       },
       summaryText: "Patient gained 2.3 kg in 48 hours, exceeding the 2.0 kg threshold. This may indicate fluid retention.",
+      lastNotifiedAt: daysAgo(3), // Email notification sent when alert was created
     },
   });
 
@@ -910,7 +911,7 @@ async function main() {
     },
   });
 
-  // Patient 4 - Critical potassium (from labs)
+  // Patient 4 - Critical potassium (from labs) - notified
   await prisma.alert.create({
     data: {
       patientId: patient4.id,
@@ -921,6 +922,7 @@ async function main() {
       status: "OPEN",
       inputs: { analyte: "Potassium", value: 5.9, unit: "mEq/L", referenceMax: 5.0 },
       summaryText: "Critical potassium level of 5.9 mEq/L detected. Immediate review recommended.",
+      lastNotifiedAt: daysAgo(1), // Email notification sent when alert was created
     },
   });
 
@@ -941,6 +943,50 @@ async function main() {
   });
 
   console.log("Created alerts");
+
+  // ============================================
+  // Notification Logs (email history)
+  // ============================================
+
+  // Get alert IDs for notification log entries
+  const weightAlert2 = await prisma.alert.findFirst({
+    where: { patientId: patient1.id, ruleId: "weight_gain_48h" },
+  });
+  const potassiumAlert = await prisma.alert.findFirst({
+    where: { patientId: patient4.id, ruleId: "lab_critical" },
+  });
+
+  if (weightAlert2) {
+    await prisma.notificationLog.create({
+      data: {
+        clinicianId: clinician1.id,
+        patientId: patient1.id,
+        alertId: weightAlert2.id,
+        channel: "EMAIL",
+        status: "SENT",
+        recipient: clinician1.email,
+        subject: "[CRITICAL] Rapid Weight Gain - John Smith",
+        sentAt: daysAgo(3),
+      },
+    });
+  }
+
+  if (potassiumAlert) {
+    await prisma.notificationLog.create({
+      data: {
+        clinicianId: clinician2.id,
+        patientId: patient4.id,
+        alertId: potassiumAlert.id,
+        channel: "EMAIL",
+        status: "SENT",
+        recipient: clinician2.email,
+        subject: "[CRITICAL] Critical Lab Value - Patricia Brown",
+        sentAt: daysAgo(1),
+      },
+    });
+  }
+
+  console.log("Created notification logs");
 
   // ============================================
   // Time Entries (RPM/CCM billing)
