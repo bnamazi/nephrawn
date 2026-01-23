@@ -942,7 +942,47 @@ async function main() {
     },
   });
 
-  console.log("Created alerts");
+  // Patient 2 - Alert with escalation level 1 (triggered 5h ago, escalated once)
+  const hoursAgo = (hours: number) => {
+    const date = new Date();
+    date.setHours(date.getHours() - hours);
+    return date;
+  };
+
+  await prisma.alert.create({
+    data: {
+      patientId: patient2.id,
+      triggeredAt: hoursAgo(5),
+      ruleId: "bp_elevated",
+      ruleName: "Elevated Blood Pressure",
+      severity: "WARNING",
+      status: "OPEN",
+      inputs: { systolic: 152, diastolic: 94, targetSystolicMax: 130, targetDiastolicMax: 85 },
+      summaryText: "Blood pressure 152/94 exceeds target range. Patient has hypertension history.",
+      escalationLevel: 1,
+      escalatedAt: hoursAgo(1),
+      lastNotifiedAt: hoursAgo(1),
+    },
+  });
+
+  // Patient 1 - Alert at max escalation level 2 (triggered 10h ago)
+  await prisma.alert.create({
+    data: {
+      patientId: patient1.id,
+      triggeredAt: hoursAgo(10),
+      ruleId: "symptom_worsening",
+      ruleName: "Worsening Edema",
+      severity: "CRITICAL",
+      status: "OPEN",
+      inputs: { symptom: "edema", previousSeverity: 1, currentSeverity: 3 },
+      summaryText: "Edema severity increased from mild to severe over 48 hours. Possible fluid overload.",
+      escalationLevel: 2,
+      escalatedAt: hoursAgo(2),
+      lastNotifiedAt: hoursAgo(2),
+    },
+  });
+
+  console.log("Created alerts (including escalation demo alerts)");
 
   // ============================================
   // Notification Logs (email history)

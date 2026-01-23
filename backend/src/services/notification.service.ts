@@ -6,7 +6,11 @@ import {
   generateAlertEmailHtml,
   generateAlertEmailText,
   generateAlertEmailSubject,
+  generateEscalationEmailHtml,
+  generateEscalationEmailText,
+  generateEscalationEmailSubject,
   AlertEmailData,
+  EscalationEmailData,
 } from "../templates/alert-email.js";
 
 // Rate limit: 1 notification per patient per hour
@@ -288,4 +292,131 @@ export async function notifyOnAlert(alert: Alert): Promise<void> {
   };
 
   await sendAlertNotification(alertWithPatient, clinician);
+}
+
+/**
+ * Send an escalation notification for an unacknowledged alert.
+ * Bypasses rate limiting and severity preferences (only checks emailEnabled).
+ */
+export async function sendEscalationNotification(
+  alert: {
+    id: string;
+    patientId: string;
+    severity: AlertSeverity;
+    ruleName: string;
+    summaryText: string | null;
+    triggeredAt: Date;
+    patient: { id: string; name: string };
+  },
+  escalationLevel: number
+): Promise<void> {
+  // Get patient's primary clinician via enrollment
+  const enrollment = await prisma.enrollment.findFirst({
+    where: {
+      patientId: alert.patientId,
+      status: "ACTIVE",
+      isPrimary: true,
+    },
+    include: {
+      clinician: {
+        select: { id: true, name: true, email: true },
+      },
+    },
+  });
+
+  if (!enrollment) {
+    logger.debug(
+      { alertId: alert.id, patientId: alert.patientId },
+      "Skipping escalation: no active primary enrollment"
+    );
+    return;
+  }
+
+  const clinician = enrollment.clinician;
+
+  // Only check if email is enabled (bypass severity preferences for escalation)
+  const prefs = await getPreferences(clinician.id);
+  if (!prefs.emailEnabled) {
+    logger.debug(
+      { alertId: alert.id, clinicianId: clinician.id },
+      "Skipping escalation: email disabled for clinician"
+    );
+
+    await logNotification({
+      clinicianId: clinician.id,
+      patientId: alert.patientId,
+      alertId: alert.id,
+      recipient: clinician.email,
+      subject: `[ESCALATION] ${alert.ruleName} - ${alert.patient.name}`,
+      status: "SKIPPED",
+      errorMessage: "Clinician has email notifications disabled",
+    });
+    return;
+  }
+
+  // Calculate hours since alert was triggered
+  const hoursUnacknowledged = Math.floor(
+    (Date.now() - alert.triggeredAt.getTime()) / (1000 * 60 * 60)
+  );
+
+  const emailData: EscalationEmailData = {
+    clinicianName: clinician.name,
+    patientName: alert.patient.name,
+    patientId: alert.patientId,
+    alertId: alert.id,
+    severity: alert.severity,
+    ruleName: alert.ruleName,
+    summaryText: alert.summaryText,
+    triggeredAt: alert.triggeredAt,
+    escalationLevel,
+    hoursUnacknowledged,
+  };
+
+  const subject = generateEscalationEmailSubject(emailData);
+  const html = generateEscalationEmailHtml(emailData);
+  const text = generateEscalationEmailText(emailData);
+
+  const adapter = getEmailAdapter();
+  const result = await adapter.send({
+    to: clinician.email,
+    subject,
+    html,
+    text,
+  });
+
+  if (result.success) {
+    await logNotification({
+      clinicianId: clinician.id,
+      patientId: alert.patientId,
+      alertId: alert.id,
+      recipient: clinician.email,
+      subject,
+      status: "SENT",
+    });
+
+    logger.info(
+      {
+        alertId: alert.id,
+        clinicianId: clinician.id,
+        patientId: alert.patientId,
+        escalationLevel,
+      },
+      "Escalation notification sent"
+    );
+  } else {
+    await logNotification({
+      clinicianId: clinician.id,
+      patientId: alert.patientId,
+      alertId: alert.id,
+      recipient: clinician.email,
+      subject,
+      status: "FAILED",
+      errorMessage: result.error,
+    });
+
+    logger.error(
+      { alertId: alert.id, error: result.error, escalationLevel },
+      "Failed to send escalation notification"
+    );
+  }
 }

@@ -3,6 +3,7 @@ import { logger } from "../lib/logger.js";
 import { prisma } from "../lib/prisma.js";
 import { logAudit } from "../services/audit.service.js";
 import { getActiveConnectionsForSync, syncWithingsData } from "../services/device.service.js";
+import { sendEscalationNotification } from "../services/notification.service.js";
 
 /**
  * Background job to expire pending invites that have passed their expiration date.
@@ -110,6 +111,83 @@ async function syncWithingsDevices(): Promise<void> {
 }
 
 /**
+ * Background job to escalate unacknowledged alerts.
+ * Runs every 30 minutes to re-notify clinicians about open alerts.
+ *
+ * Escalation levels:
+ * - Level 0 → 1: Alert unacknowledged for 4+ hours since triggeredAt
+ * - Level 1 → 2: Alert unacknowledged for 4+ hours since escalatedAt
+ * - Level 2: Maximum level (no further escalation)
+ */
+async function escalateUnacknowledgedAlerts(): Promise<void> {
+  const jobLogger = logger.child({ job: "escalateUnacknowledgedAlerts" });
+
+  try {
+    const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+
+    const alertsToEscalate = await prisma.alert.findMany({
+      where: {
+        status: "OPEN",
+        escalationLevel: { lt: 2 },
+        OR: [
+          { escalationLevel: 0, triggeredAt: { lt: fourHoursAgo } },
+          { escalationLevel: 1, escalatedAt: { lt: fourHoursAgo } },
+        ],
+      },
+      include: { patient: { select: { id: true, name: true } } },
+    });
+
+    if (alertsToEscalate.length === 0) {
+      jobLogger.debug("No alerts to escalate");
+      return;
+    }
+
+    jobLogger.info({ alertCount: alertsToEscalate.length }, "Escalating unacknowledged alerts");
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const alert of alertsToEscalate) {
+      try {
+        const newLevel = alert.escalationLevel + 1;
+
+        await prisma.alert.update({
+          where: { id: alert.id },
+          data: {
+            escalationLevel: newLevel,
+            escalatedAt: new Date(),
+          },
+        });
+
+        await sendEscalationNotification(
+          { ...alert, patient: alert.patient },
+          newLevel
+        );
+
+        jobLogger.debug(
+          { alertId: alert.id, patientId: alert.patientId, newLevel },
+          "Alert escalated"
+        );
+        successCount++;
+      } catch (err) {
+        jobLogger.error(
+          { err, alertId: alert.id, patientId: alert.patientId },
+          "Failed to escalate alert"
+        );
+        errorCount++;
+      }
+    }
+
+    jobLogger.info(
+      { total: alertsToEscalate.length, success: successCount, errors: errorCount },
+      "Alert escalation completed"
+    );
+  } catch (error) {
+    jobLogger.error({ err: error }, "Failed to run alert escalation job");
+  }
+}
+
+/**
  * Start all background jobs
  */
 export function startBackgroundJobs(): void {
@@ -123,6 +201,11 @@ export function startBackgroundJobs(): void {
   // Sync Withings devices - runs every 15 minutes
   cron.schedule("*/15 * * * *", async () => {
     await syncWithingsDevices();
+  });
+
+  // Escalate unacknowledged alerts - runs every 30 minutes
+  cron.schedule("*/30 * * * *", async () => {
+    await escalateUnacknowledgedAlerts();
   });
 
   // Also run once on startup to catch any missed expirations
@@ -143,4 +226,4 @@ export function stopBackgroundJobs(): void {
 }
 
 // Export for testing
-export { expireOldInvites, syncWithingsDevices };
+export { expireOldInvites, syncWithingsDevices, escalateUnacknowledgedAlerts };
