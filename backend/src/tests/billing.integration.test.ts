@@ -178,7 +178,7 @@ describe("Billing Integration Tests", () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Create time entries totaling 25 minutes
+      // Create RPM time entries totaling 25 minutes (RPM activities only)
       await prisma.timeEntry.create({
         data: {
           patientId,
@@ -186,7 +186,7 @@ describe("Billing Integration Tests", () => {
           clinicId,
           entryDate: today,
           durationMinutes: 15,
-          activity: "PATIENT_REVIEW",
+          activity: "PATIENT_REVIEW", // RPM activity
         },
       });
 
@@ -197,7 +197,7 @@ describe("Billing Integration Tests", () => {
           clinicId,
           entryDate: today,
           durationMinutes: 10,
-          activity: "CARE_PLAN_UPDATE",
+          activity: "DOCUMENTATION", // RPM activity (not CCM)
         },
       });
 
@@ -207,7 +207,7 @@ describe("Billing Integration Tests", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.summary.time.totalMinutes).toBe(25);
-      expect(response.body.summary.time.rpmMinutes).toBe(25);
+      expect(response.body.summary.time.rpmMinutes).toBe(25); // All RPM activities
       expect(response.body.summary.time.eligible99457).toBe(true);
       expect(response.body.summary.eligibleCodes).toContain("99457");
     });
@@ -267,7 +267,7 @@ describe("Billing Integration Tests", () => {
         },
       });
 
-      // Non-CCM activity
+      // Non-CCM activity (RPM only)
       await prisma.timeEntry.create({
         data: {
           patientId,
@@ -275,7 +275,7 @@ describe("Billing Integration Tests", () => {
           clinicId,
           entryDate: today,
           durationMinutes: 30,
-          activity: "PATIENT_REVIEW", // Not CCM
+          activity: "PATIENT_REVIEW", // RPM (not CCM)
         },
       });
 
@@ -285,9 +285,10 @@ describe("Billing Integration Tests", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.summary.time.totalMinutes).toBe(55);
-      expect(response.body.summary.time.rpmMinutes).toBe(55);
-      expect(response.body.summary.time.ccmMinutes).toBe(25);
-      expect(response.body.summary.time.eligible99490).toBe(true);
+      // RPM and CCM are mutually exclusive - activities count toward one or the other
+      expect(response.body.summary.time.rpmMinutes).toBe(30); // PATIENT_REVIEW only
+      expect(response.body.summary.time.ccmMinutes).toBe(25); // CCM activities only
+      expect(response.body.summary.time.eligible99490).toBe(true); // 25 >= 20
       expect(response.body.summary.eligibleCodes).toContain("99490");
     });
 
@@ -314,6 +315,91 @@ describe("Billing Integration Tests", () => {
       expect(response.body.summary.time.totalMinutes).toBe(19);
       expect(response.body.summary.time.eligible99457).toBe(false);
       expect(response.body.summary.eligibleCodes).not.toContain("99457");
+    });
+
+    it("calculates 99091 eligibility for 30+ min physician RPM time", async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Create physician RPM time entry of 35 minutes
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 35,
+          activity: "PATIENT_REVIEW", // RPM activity
+          performerType: "PHYSICIAN_QHP",
+        },
+      });
+
+      const response = await request(testApp)
+        .get(`/clinician/patients/${patientId}/billing-summary`)
+        .set("Authorization", `Bearer ${clinicianToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.summary.time.rpmPhysicianMinutes).toBe(35);
+      expect(response.body.summary.time.eligible99091).toBe(true);
+      expect(response.body.summary.eligibleCodes).toContain("99091");
+      // Should also have 99457 since 35 >= 20
+      expect(response.body.summary.eligibleCodes).toContain("99457");
+    });
+
+    it("29 minutes of physician RPM time is not eligible for 99091", async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 29,
+          activity: "DOCUMENTATION", // RPM activity
+          performerType: "PHYSICIAN_QHP",
+        },
+      });
+
+      const response = await request(testApp)
+        .get(`/clinician/patients/${patientId}/billing-summary`)
+        .set("Authorization", `Bearer ${clinicianToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.summary.time.rpmPhysicianMinutes).toBe(29);
+      expect(response.body.summary.time.eligible99091).toBe(false);
+      expect(response.body.summary.eligibleCodes).not.toContain("99091");
+    });
+
+    it("clinical staff RPM time does not count toward 99091", async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Create clinical staff RPM time entry
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 45,
+          activity: "PATIENT_REVIEW",
+          performerType: "CLINICAL_STAFF",
+        },
+      });
+
+      const response = await request(testApp)
+        .get(`/clinician/patients/${patientId}/billing-summary`)
+        .set("Authorization", `Bearer ${clinicianToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.summary.time.rpmMinutes).toBe(45);
+      expect(response.body.summary.time.rpmPhysicianMinutes).toBe(0);
+      expect(response.body.summary.time.eligible99091).toBe(false);
+      expect(response.body.summary.eligibleCodes).not.toContain("99091");
+      // Should still have 99457 since total RPM time >= 20
+      expect(response.body.summary.eligibleCodes).toContain("99457");
     });
   });
 
@@ -390,7 +476,7 @@ describe("Billing Integration Tests", () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Add time entries for both patients
+      // Add RPM time entries for both patients (to count toward 99457)
       await prisma.timeEntry.create({
         data: {
           patientId,
@@ -398,7 +484,7 @@ describe("Billing Integration Tests", () => {
           clinicId,
           entryDate: today,
           durationMinutes: 25,
-          activity: "PATIENT_REVIEW",
+          activity: "PATIENT_REVIEW", // RPM activity
         },
       });
 
@@ -409,7 +495,7 @@ describe("Billing Integration Tests", () => {
           clinicId,
           entryDate: today,
           durationMinutes: 30,
-          activity: "CARE_PLAN_UPDATE",
+          activity: "DOCUMENTATION", // RPM activity (not CCM)
         },
       });
 
@@ -419,8 +505,8 @@ describe("Billing Integration Tests", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.report.summary.totalPatients).toBe(2);
-      expect(response.body.report.summary.patientsWith99457).toBe(2);
-      expect(response.body.report.summary.totalRpmMinutes).toBe(55);
+      expect(response.body.report.summary.patientsWith99457).toBe(2); // Both have 20+ RPM min
+      expect(response.body.report.summary.totalRpmMinutes).toBe(55); // 25 + 30
       expect(response.body.report.patients).toHaveLength(2);
     });
 
@@ -480,6 +566,387 @@ describe("Billing Integration Tests", () => {
 
       expect(currentResponse.status).toBe(200);
       expect(currentResponse.body.summary.time.totalMinutes).toBe(0);
+    });
+  });
+
+  describe("CCM Add-on Codes (99439, 99491, 99437)", () => {
+    it("calculates 99439 add-on blocks for additional CCM staff time", async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Create CCM activity with 65 minutes of clinical staff time (20 + 20 + 20 + 5)
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 65,
+          activity: "CARE_PLAN_UPDATE", // CCM activity
+          performerType: "CLINICAL_STAFF",
+        },
+      });
+
+      const response = await request(testApp)
+        .get(`/clinician/patients/${patientId}/billing-summary`)
+        .set("Authorization", `Bearer ${clinicianToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.summary.time.ccmClinicalStaffMinutes).toBe(65);
+      expect(response.body.summary.time.eligible99490).toBe(true);
+      expect(response.body.summary.time.eligible99439Count).toBe(2); // (65-20)/20 = 2 blocks
+      expect(response.body.summary.eligibleCodes).toContain("99490");
+      expect(response.body.summary.eligibleCodes.filter((c: string) => c === "99439")).toHaveLength(2);
+    });
+
+    it("calculates 99491 for 30+ physician CCM time", async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Create CCM activity with 35 minutes of physician time
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 35,
+          activity: "PHONE_CALL", // CCM activity
+          performerType: "PHYSICIAN_QHP",
+        },
+      });
+
+      const response = await request(testApp)
+        .get(`/clinician/patients/${patientId}/billing-summary`)
+        .set("Authorization", `Bearer ${clinicianToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.summary.time.ccmPhysicianMinutes).toBe(35);
+      expect(response.body.summary.time.eligible99491).toBe(true);
+      expect(response.body.summary.eligibleCodes).toContain("99491");
+    });
+
+    it("calculates 99437 add-on blocks for additional CCM physician time", async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Create CCM activity with 95 minutes of physician time (30 + 30 + 30 + 5)
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 95,
+          activity: "COORDINATION", // CCM activity
+          performerType: "PHYSICIAN_QHP",
+        },
+      });
+
+      const response = await request(testApp)
+        .get(`/clinician/patients/${patientId}/billing-summary`)
+        .set("Authorization", `Bearer ${clinicianToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.summary.time.ccmPhysicianMinutes).toBe(95);
+      expect(response.body.summary.time.eligible99491).toBe(true);
+      expect(response.body.summary.time.eligible99437Count).toBe(2); // (95-30)/30 = 2 blocks
+      expect(response.body.summary.eligibleCodes).toContain("99491");
+      expect(response.body.summary.eligibleCodes.filter((c: string) => c === "99437")).toHaveLength(2);
+    });
+
+    it("allows both staff and physician CCM codes to coexist", async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Create mixed CCM activities
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 25, // Staff time
+          activity: "CARE_PLAN_UPDATE",
+          performerType: "CLINICAL_STAFF",
+        },
+      });
+
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 35, // Physician time
+          activity: "PHONE_CALL",
+          performerType: "PHYSICIAN_QHP",
+        },
+      });
+
+      const response = await request(testApp)
+        .get(`/clinician/patients/${patientId}/billing-summary`)
+        .set("Authorization", `Bearer ${clinicianToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.summary.time.eligible99490).toBe(true);
+      expect(response.body.summary.time.eligible99491).toBe(true);
+      expect(response.body.summary.eligibleCodes).toContain("99490");
+      expect(response.body.summary.eligibleCodes).toContain("99491");
+    });
+  });
+
+  describe("PCM Codes (99424, 99425, 99426, 99427)", () => {
+    it("includes PCM codes when billing program is RPM_PCM", async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Update enrollment to PCM track
+      await prisma.enrollment.updateMany({
+        where: { patientId, clinicianId },
+        data: { billingProgram: "RPM_PCM" },
+      });
+
+      // Create PCM activity with physician time
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 35,
+          activity: "PHONE_CALL",
+          performerType: "PHYSICIAN_QHP",
+        },
+      });
+
+      const response = await request(testApp)
+        .get(`/clinician/patients/${patientId}/billing-summary`)
+        .set("Authorization", `Bearer ${clinicianToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.summary.time.eligible99424).toBe(true);
+      expect(response.body.summary.eligibleCodes).toContain("99424");
+      // Should NOT contain CCM codes
+      expect(response.body.summary.eligibleCodes).not.toContain("99490");
+      expect(response.body.summary.eligibleCodes).not.toContain("99491");
+    });
+
+    it("calculates 99425 add-on blocks for additional PCM physician time", async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      await prisma.enrollment.updateMany({
+        where: { patientId, clinicianId },
+        data: { billingProgram: "RPM_PCM" },
+      });
+
+      // Create PCM activity with 95 minutes of physician time
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 95,
+          activity: "COORDINATION",
+          performerType: "PHYSICIAN_QHP",
+        },
+      });
+
+      const response = await request(testApp)
+        .get(`/clinician/patients/${patientId}/billing-summary`)
+        .set("Authorization", `Bearer ${clinicianToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.summary.time.eligible99424).toBe(true);
+      expect(response.body.summary.time.eligible99425Count).toBe(2);
+      expect(response.body.summary.eligibleCodes).toContain("99424");
+      expect(response.body.summary.eligibleCodes.filter((c: string) => c === "99425")).toHaveLength(2);
+    });
+
+    it("uses 99426 for PCM staff time when no physician time", async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      await prisma.enrollment.updateMany({
+        where: { patientId, clinicianId },
+        data: { billingProgram: "RPM_PCM" },
+      });
+
+      // Create PCM activity with clinical staff time only
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 35,
+          activity: "CARE_PLAN_UPDATE",
+          performerType: "CLINICAL_STAFF",
+        },
+      });
+
+      const response = await request(testApp)
+        .get(`/clinician/patients/${patientId}/billing-summary`)
+        .set("Authorization", `Bearer ${clinicianToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.summary.time.eligible99426).toBe(true);
+      expect(response.body.summary.eligibleCodes).toContain("99426");
+      expect(response.body.summary.eligibleCodes).not.toContain("99424");
+    });
+
+    it("physician codes take priority over staff codes in PCM track", async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      await prisma.enrollment.updateMany({
+        where: { patientId, clinicianId },
+        data: { billingProgram: "RPM_PCM" },
+      });
+
+      // Create both physician and staff PCM time
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 35,
+          activity: "PHONE_CALL",
+          performerType: "PHYSICIAN_QHP",
+        },
+      });
+
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 35,
+          activity: "CARE_PLAN_UPDATE",
+          performerType: "CLINICAL_STAFF",
+        },
+      });
+
+      const response = await request(testApp)
+        .get(`/clinician/patients/${patientId}/billing-summary`)
+        .set("Authorization", `Bearer ${clinicianToken}`);
+
+      expect(response.status).toBe(200);
+      // Should have physician code but NOT staff code (mutually exclusive in PCM)
+      expect(response.body.summary.eligibleCodes).toContain("99424");
+      expect(response.body.summary.eligibleCodes).not.toContain("99426");
+    });
+  });
+
+  describe("CCM vs PCM Mutual Exclusivity", () => {
+    it("RPM_CCM track does not include PCM codes", async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Ensure CCM track (default)
+      await prisma.enrollment.updateMany({
+        where: { patientId, clinicianId },
+        data: { billingProgram: "RPM_CCM" },
+      });
+
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 35,
+          activity: "PHONE_CALL",
+          performerType: "PHYSICIAN_QHP",
+        },
+      });
+
+      const response = await request(testApp)
+        .get(`/clinician/patients/${patientId}/billing-summary`)
+        .set("Authorization", `Bearer ${clinicianToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.summary.eligibleCodes).toContain("99491"); // CCM physician
+      expect(response.body.summary.eligibleCodes).not.toContain("99424"); // PCM physician
+      expect(response.body.summary.eligibleCodes).not.toContain("99426"); // PCM staff
+    });
+
+    it("RPM_ONLY track does not include CCM or PCM codes", async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      await prisma.enrollment.updateMany({
+        where: { patientId, clinicianId },
+        data: { billingProgram: "RPM_ONLY" },
+      });
+
+      await prisma.timeEntry.create({
+        data: {
+          patientId,
+          clinicianId,
+          clinicId,
+          entryDate: today,
+          durationMinutes: 35,
+          activity: "PHONE_CALL",
+          performerType: "PHYSICIAN_QHP",
+        },
+      });
+
+      const response = await request(testApp)
+        .get(`/clinician/patients/${patientId}/billing-summary`)
+        .set("Authorization", `Bearer ${clinicianToken}`);
+
+      expect(response.status).toBe(200);
+      // Should not contain any CCM or PCM codes
+      expect(response.body.summary.eligibleCodes).not.toContain("99490");
+      expect(response.body.summary.eligibleCodes).not.toContain("99491");
+      expect(response.body.summary.eligibleCodes).not.toContain("99424");
+      expect(response.body.summary.eligibleCodes).not.toContain("99426");
+    });
+  });
+
+  describe("Billing Program Update Endpoint", () => {
+    it("updates billing program successfully", async () => {
+      const response = await request(testApp)
+        .put(`/clinician/patients/${patientId}/billing-program`)
+        .set("Authorization", `Bearer ${clinicianToken}`)
+        .send({ billingProgram: "RPM_PCM" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.enrollment.billingProgram).toBe("RPM_PCM");
+
+      // Verify change persisted
+      const enrollment = await prisma.enrollment.findFirst({
+        where: { patientId, clinicianId },
+      });
+      expect(enrollment?.billingProgram).toBe("RPM_PCM");
+    });
+
+    it("rejects invalid billing program", async () => {
+      const response = await request(testApp)
+        .put(`/clinician/patients/${patientId}/billing-program`)
+        .set("Authorization", `Bearer ${clinicianToken}`)
+        .send({ billingProgram: "INVALID" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain("billingProgram");
+    });
+
+    it("returns 404 for unenrolled patient", async () => {
+      const otherPatient = await createTestPatient({
+        email: "other-billing@example.com",
+      });
+
+      const response = await request(testApp)
+        .put(`/clinician/patients/${otherPatient.id}/billing-program`)
+        .set("Authorization", `Bearer ${clinicianToken}`)
+        .send({ billingProgram: "RPM_PCM" });
+
+      expect(response.status).toBe(404);
     });
   });
 

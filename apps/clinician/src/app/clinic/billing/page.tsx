@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClinic } from '@/contexts/ClinicContext';
@@ -13,6 +13,46 @@ import {
 } from '@/lib/types';
 import Button from '@/components/ui/Button';
 
+// Card configuration for consistent display
+interface BillingCard {
+  code: string;
+  label: string;
+  threshold: string;
+  getValue: (summary: ClinicBillingReport['summary']) => number;
+  colorClass: string;
+}
+
+const BILLING_CARDS: BillingCard[][] = [
+  // Row 1 - Device/Setup
+  [
+    { code: '', label: 'Total Patients', threshold: '', getValue: (s) => s.totalPatients, colorClass: 'bg-gray-50 border-gray-200 text-gray-700' },
+    { code: '99453', label: 'Initial Setup', threshold: 'One-time setup', getValue: (s) => s.patientsWith99453, colorClass: 'bg-yellow-50 border-yellow-200 text-yellow-700' },
+    { code: '99445', label: 'Device (2-15 days)', threshold: '2-15 transmission days', getValue: (s) => s.patientsWith99445 || 0, colorClass: 'bg-green-50 border-green-200 text-green-600' },
+    { code: '99454', label: 'Device (16+ days)', threshold: '16+ transmission days', getValue: (s) => s.patientsWith99454, colorClass: 'bg-green-100 border-green-300 text-green-700' },
+  ],
+  // Row 2 - RPM Time
+  [
+    { code: '99470', label: 'RPM (10-19 min)', threshold: '10-19 min RPM time', getValue: (s) => s.patientsWith99470 || 0, colorClass: 'bg-blue-50 border-blue-200 text-blue-600' },
+    { code: '99457', label: 'RPM (20+ min)', threshold: '20+ min RPM time', getValue: (s) => s.patientsWith99457, colorClass: 'bg-blue-100 border-blue-300 text-blue-700' },
+    { code: '99458', label: 'RPM Add-on', threshold: 'Additional 20 min blocks', getValue: (s) => s.patientsWith99457, colorClass: 'bg-blue-100 border-blue-300 text-blue-800' },
+    { code: '99091', label: 'RPM Physician', threshold: '30+ min physician', getValue: (s) => s.patientsWith99091 || 0, colorClass: 'bg-indigo-100 border-indigo-300 text-indigo-700' },
+  ],
+  // Row 3 - CCM
+  [
+    { code: '99490', label: 'CCM Staff', threshold: '20+ min staff time', getValue: (s) => s.patientsWith99490 || 0, colorClass: 'bg-purple-50 border-purple-200 text-purple-600' },
+    { code: '99439', label: 'CCM Staff Add-on', threshold: 'Per 20 min staff', getValue: (s) => s.patientsWith99439 || 0, colorClass: 'bg-purple-100 border-purple-300 text-purple-700' },
+    { code: '99491', label: 'CCM Physician', threshold: '30+ min physician', getValue: (s) => s.patientsWith99491 || 0, colorClass: 'bg-purple-100 border-purple-300 text-purple-800' },
+    { code: '99437', label: 'CCM Phys Add-on', threshold: 'Per 30 min physician', getValue: (s) => s.patientsWith99437 || 0, colorClass: 'bg-purple-200 border-purple-400 text-purple-900' },
+  ],
+  // Row 4 - PCM
+  [
+    { code: '99424', label: 'PCM Physician', threshold: '30+ min physician', getValue: (s) => s.patientsWith99424 || 0, colorClass: 'bg-orange-50 border-orange-200 text-orange-600' },
+    { code: '99425', label: 'PCM Phys Add-on', threshold: 'Per 30 min physician', getValue: (s) => s.patientsWith99425 || 0, colorClass: 'bg-orange-100 border-orange-300 text-orange-700' },
+    { code: '99426', label: 'PCM Staff', threshold: '30+ min staff', getValue: (s) => s.patientsWith99426 || 0, colorClass: 'bg-orange-100 border-orange-300 text-orange-800' },
+    { code: '99427', label: 'PCM Staff Add-on', threshold: 'Per 30 min staff', getValue: (s) => s.patientsWith99427 || 0, colorClass: 'bg-orange-200 border-orange-400 text-orange-900' },
+  ],
+];
+
 export default function ClinicBillingPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
@@ -21,6 +61,7 @@ export default function ClinicBillingPage() {
   const [report, setReport] = useState<ClinicBillingReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -66,6 +107,19 @@ export default function ClinicBillingPage() {
       fetchReport();
     }
   }, [isAuthenticated, selectedClinic, router, fetchReport]);
+
+  // Filter patients based on selected code
+  const filteredPatients = useMemo(() => {
+    if (!report) return [];
+    if (!selectedFilter) return report.patients;
+    return report.patients.filter((p) => p.eligibleCodes.includes(selectedFilter));
+  }, [report, selectedFilter]);
+
+  // Handle card click
+  const handleCardClick = (code: string) => {
+    if (!code) return; // Total Patients card is not clickable
+    setSelectedFilter(selectedFilter === code ? null : code);
+  };
 
   // Generate month options for the last 12 months
   const monthOptions = Array.from({ length: 12 }, (_, i) => {
@@ -174,40 +228,50 @@ export default function ClinicBillingPage() {
       {/* Summary Cards */}
       {report && (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-              <p className="text-3xl font-bold text-gray-900">{report.summary.totalPatients}</p>
-              <p className="text-sm text-gray-600">Total Patients</p>
+          {BILLING_CARDS.map((row, rowIndex) => (
+            <div key={rowIndex} className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              {row.map((card) => {
+                const isSelected = selectedFilter === card.code;
+                const isClickable = card.code !== '';
+                return (
+                  <button
+                    key={card.code || 'total'}
+                    onClick={() => handleCardClick(card.code)}
+                    disabled={!isClickable}
+                    className={`${card.colorClass} border rounded-lg p-4 shadow-sm text-left transition-all ${
+                      isClickable ? 'cursor-pointer hover:shadow-md' : 'cursor-default'
+                    } ${isSelected ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
+                  >
+                    <p className="text-3xl font-bold">{card.getValue(report.summary)}</p>
+                    <p className="text-sm font-medium">
+                      {card.code ? `${card.code} - ${card.label}` : card.label}
+                    </p>
+                    {card.threshold && (
+                      <p className="text-xs opacity-75 mt-1">{card.threshold}</p>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 shadow-sm">
-              <p className="text-3xl font-bold text-yellow-700">{report.summary.patientsWith99453 || 0}</p>
-              <p className="text-sm text-yellow-600">Eligible for 99453</p>
-              <p className="text-xs text-yellow-500 mt-1">Initial setup (one-time)</p>
+          ))}
+
+          {/* Filter Indicator */}
+          {selectedFilter && (
+            <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              <span className="text-sm text-blue-700">
+                Showing patients eligible for <strong>{selectedFilter}</strong> - {CPT_CODE_LABELS[selectedFilter]}
+              </span>
+              <button
+                onClick={() => setSelectedFilter(null)}
+                className="ml-auto text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                Clear filter
+              </button>
             </div>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 shadow-sm">
-              <p className="text-3xl font-bold text-green-700">
-                {(report.summary.patientsWith99445 || 0) + report.summary.patientsWith99454}
-              </p>
-              <p className="text-sm text-green-600">Eligible for 99445/99454</p>
-              <p className="text-xs text-green-500 mt-1">
-                {report.summary.patientsWith99454} (16+ days) / {report.summary.patientsWith99445 || 0} (2-15 days)
-              </p>
-            </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-sm">
-              <p className="text-3xl font-bold text-blue-700">
-                {(report.summary.patientsWith99470 || 0) + report.summary.patientsWith99457}
-              </p>
-              <p className="text-sm text-blue-600">Eligible for 99470/99457</p>
-              <p className="text-xs text-blue-500 mt-1">
-                {report.summary.patientsWith99457} (20+ RPM) / {report.summary.patientsWith99470 || 0} (10-19 RPM)
-              </p>
-            </div>
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 shadow-sm">
-              <p className="text-3xl font-bold text-purple-700">{report.summary.patientsWith99490}</p>
-              <p className="text-sm text-purple-600">Eligible for 99490</p>
-              <p className="text-xs text-purple-500 mt-1">{report.summary.totalCcmMinutes} total CCM min</p>
-            </div>
-          </div>
+          )}
 
           {/* CPT Code Legend */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
@@ -224,7 +288,14 @@ export default function ClinicBillingPage() {
           {/* Patient Table */}
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-200">
-              <h3 className="text-sm font-medium text-gray-900">Patient Details</h3>
+              <h3 className="text-sm font-medium text-gray-900">
+                Patient Details
+                {selectedFilter && (
+                  <span className="ml-2 text-gray-500">
+                    ({filteredPatients.length} of {report.patients.length} patients)
+                  </span>
+                )}
+              </h3>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -248,14 +319,14 @@ export default function ClinicBillingPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {report.patients.length === 0 ? (
+                  {filteredPatients.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                        No patients enrolled
+                        {selectedFilter ? 'No patients match this filter' : 'No patients enrolled'}
                       </td>
                     </tr>
                   ) : (
-                    report.patients.map((patient: PatientBillingSummary) => (
+                    filteredPatients.map((patient: PatientBillingSummary) => (
                       <tr key={patient.patientId} className="hover:bg-gray-50">
                         <td className="px-4 py-3">
                           <button
@@ -303,10 +374,15 @@ export default function ClinicBillingPage() {
                             <div className="flex flex-wrap gap-1">
                               {[...new Set(patient.eligibleCodes)].map((code) => {
                                 const count = patient.eligibleCodes.filter((c) => c === code).length;
+                                const isHighlighted = selectedFilter === code;
                                 return (
                                   <span
                                     key={code}
-                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                      isHighlighted
+                                        ? 'bg-blue-100 text-blue-800 ring-1 ring-blue-500'
+                                        : 'bg-green-100 text-green-800'
+                                    }`}
                                   >
                                     {code}{count > 1 ? ` x${count}` : ''}
                                   </span>

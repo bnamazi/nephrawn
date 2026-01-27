@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { TimeEntryActivity, TIME_ENTRY_ACTIVITY_LABELS } from '@/lib/types';
+import { TimeEntryActivity, TIME_ENTRY_ACTIVITY_LABELS, PerformerType, PERFORMER_TYPE_LABELS, ACTIVITY_BILLING_INFO } from '@/lib/types';
 import Button from '@/components/ui/Button';
 
 interface TimeEntryFormProps {
@@ -9,6 +9,7 @@ interface TimeEntryFormProps {
     entryDate: string;
     durationMinutes: number;
     activity: TimeEntryActivity;
+    performerType: PerformerType;
     notes?: string;
   }) => Promise<void>;
   onCancel: () => void;
@@ -20,6 +21,7 @@ export default function TimeEntryForm({ onSubmit, onCancel, isLoading }: TimeEnt
   const [entryDate, setEntryDate] = useState(today);
   const [durationMinutes, setDurationMinutes] = useState('20');
   const [activity, setActivity] = useState<TimeEntryActivity>('PATIENT_REVIEW');
+  const [performerType, setPerformerType] = useState<PerformerType>('CLINICAL_STAFF');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +53,7 @@ export default function TimeEntryForm({ onSubmit, onCancel, isLoading }: TimeEnt
         entryDate,
         durationMinutes: duration,
         activity,
+        performerType,
         notes: notes.trim() || undefined,
       });
     } catch (err) {
@@ -73,7 +76,7 @@ export default function TimeEntryForm({ onSubmit, onCancel, isLoading }: TimeEnt
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Date
@@ -113,6 +116,24 @@ export default function TimeEntryForm({ onSubmit, onCancel, isLoading }: TimeEnt
             required
           >
             {Object.entries(TIME_ENTRY_ACTIVITY_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            {ACTIVITY_BILLING_INFO[activity]}
+          </p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Performed By
+          </label>
+          <select
+            value={performerType}
+            onChange={(e) => setPerformerType(e.target.value as PerformerType)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          >
+            {Object.entries(PERFORMER_TYPE_LABELS).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </select>

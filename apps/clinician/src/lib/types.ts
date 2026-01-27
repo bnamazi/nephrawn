@@ -654,6 +654,10 @@ export type TimeEntryActivity =
   | 'DOCUMENTATION'
   | 'OTHER';
 
+export type PerformerType = 'CLINICAL_STAFF' | 'PHYSICIAN_QHP';
+
+export type BillingProgram = 'RPM_CCM' | 'RPM_PCM' | 'RPM_ONLY';
+
 export interface TimeEntry {
   id: string;
   patientId: string;
@@ -662,6 +666,7 @@ export interface TimeEntry {
   entryDate: string;
   durationMinutes: number;
   activity: TimeEntryActivity;
+  performerType: PerformerType;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -689,14 +694,37 @@ export interface TimeEntrySummaryResponse {
   summary: TimeEntrySummary;
 }
 
-// Activity labels with CPT codes - RPM and CCM are mutually exclusive (no double-counting)
+// Activity labels - clean labels without CPT codes
 export const TIME_ENTRY_ACTIVITY_LABELS: Record<TimeEntryActivity, string> = {
-  PATIENT_REVIEW: 'Patient/Data Review (RPM: 99457/99470)',
-  DOCUMENTATION: 'Documentation (RPM: 99457/99470)',
-  OTHER: 'Other RPM Activity (RPM: 99457/99470)',
-  CARE_PLAN_UPDATE: 'Care Plan Update (CCM: 99490)',
-  PHONE_CALL: 'Phone Call (CCM: 99490)',
-  COORDINATION: 'Care Coordination (CCM: 99490)',
+  PATIENT_REVIEW: 'Patient/Data Review',
+  DOCUMENTATION: 'Documentation',
+  OTHER: 'Other RPM Activity',
+  CARE_PLAN_UPDATE: 'Care Plan Update',
+  PHONE_CALL: 'Phone Call',
+  COORDINATION: 'Care Coordination',
+};
+
+// Activity to billing info mapping - shows which codes each activity contributes to
+export const ACTIVITY_BILLING_INFO: Record<TimeEntryActivity, string> = {
+  PATIENT_REVIEW: 'Counts toward RPM codes (99457/99470, 99091 if physician)',
+  DOCUMENTATION: 'Counts toward RPM codes (99457/99470, 99091 if physician)',
+  OTHER: 'Counts toward RPM codes (99457/99470, 99091 if physician)',
+  CARE_PLAN_UPDATE: 'Counts toward CCM/PCM codes based on billing program',
+  PHONE_CALL: 'Counts toward CCM/PCM codes based on billing program',
+  COORDINATION: 'Counts toward CCM/PCM codes based on billing program',
+};
+
+// Performer type labels - determines CCM vs PCM sub-codes
+export const PERFORMER_TYPE_LABELS: Record<PerformerType, string> = {
+  CLINICAL_STAFF: 'Clinical Staff',
+  PHYSICIAN_QHP: 'Physician/QHP',
+};
+
+// Billing program labels
+export const BILLING_PROGRAM_LABELS: Record<BillingProgram, string> = {
+  RPM_CCM: 'RPM + CCM (2+ chronic conditions)',
+  RPM_PCM: 'RPM + PCM (single high-risk condition)',
+  RPM_ONLY: 'RPM Only',
 };
 
 // ============================================
@@ -714,11 +742,28 @@ export interface BillingTimeSummary {
   totalMinutes: number;
   byActivity: Partial<Record<TimeEntryActivity, number>>;
   rpmMinutes: number; // RPM activities only (Patient Review, Documentation, Other)
+  rpmPhysicianMinutes: number; // RPM activities by physician only (for 99091)
   ccmMinutes: number; // CCM activities only (Care Plan, Phone Call, Coordination)
   eligible99470: boolean; // 10-19 RPM min (new 2026 code)
   eligible99457: boolean; // 20+ RPM min
   eligible99458Count: number; // max 2 per month
-  eligible99490: boolean; // 20+ CCM min
+  eligible99091: boolean; // 30+ min physician RPM time
+  eligible99490: boolean; // 20+ CCM staff min
+
+  // CCM breakdown by performer type
+  ccmClinicalStaffMinutes: number;
+  ccmPhysicianMinutes: number;
+  eligible99439Count: number;  // Add-on blocks to 99490 (max 2)
+  eligible99491: boolean;      // 30+ min physician
+  eligible99437Count: number;  // Add-on blocks to 99491 (max 2)
+
+  // PCM breakdown by performer type
+  pcmPhysicianMinutes: number;
+  pcmClinicalStaffMinutes: number;
+  eligible99424: boolean;      // 30+ min physician
+  eligible99425Count: number;  // Add-on blocks (max 2)
+  eligible99426: boolean;      // 30+ min staff
+  eligible99427Count: number;  // Add-on blocks (max 2)
 }
 
 export interface InitialSetupSummary {
@@ -749,7 +794,15 @@ export interface ClinicBillingSummary {
   patientsWith99454: number; // 16+ device days
   patientsWith99470: number; // 10-19 RPM min (new 2026)
   patientsWith99457: number; // 20+ RPM min
-  patientsWith99490: number; // 20+ CCM min
+  patientsWith99091: number; // 30+ RPM physician min (data interpretation)
+  patientsWith99490: number; // 20+ CCM staff min
+  patientsWith99439: number; // CCM staff add-on blocks
+  patientsWith99491: number; // 30+ CCM physician min
+  patientsWith99437: number; // CCM physician add-on blocks
+  patientsWith99424: number; // 30+ PCM physician min
+  patientsWith99425: number; // PCM physician add-on blocks
+  patientsWith99426: number; // 30+ PCM staff min
+  patientsWith99427: number; // PCM staff add-on blocks
   totalRpmMinutes: number;
   totalCcmMinutes: number;
 }
@@ -768,13 +821,24 @@ export interface ClinicBillingReportResponse {
 
 // CPT Code labels (2026 CMS rules)
 export const CPT_CODE_LABELS: Record<string, string> = {
+  // RPM codes
   '99453': 'Initial Setup & Education (one-time)',
   '99445': 'Device Supply (2-15 days)',
   '99454': 'Device Supply (16+ days)',
   '99470': 'RPM Time (10-19 min)',
   '99457': 'RPM Time (20+ min)',
   '99458': 'RPM Additional 20-min (max 2)',
-  '99490': 'CCM Time (20+ min)',
+  '99091': 'RPM Physician Data Review (30+ min)',
+  // CCM codes (2+ chronic conditions)
+  '99490': 'CCM Staff (20+ min)',
+  '99439': 'CCM Staff Add-on (per 20 min, max 2)',
+  '99491': 'CCM Physician (30+ min)',
+  '99437': 'CCM Physician Add-on (per 30 min, max 2)',
+  // PCM codes (single high-risk condition)
+  '99424': 'PCM Physician (30+ min)',
+  '99425': 'PCM Physician Add-on (per 30 min, max 2)',
+  '99426': 'PCM Staff (30+ min)',
+  '99427': 'PCM Staff Add-on (per 30 min, max 2)',
 };
 
 // ============================================

@@ -12,6 +12,7 @@ import {
   TimeEntryResponse,
   TimeEntrySummaryResponse,
   TimeEntryActivity,
+  PerformerType,
   TIME_ENTRY_ACTIVITY_LABELS,
   PatientBillingSummary,
   PatientBillingSummaryResponse,
@@ -72,6 +73,7 @@ export default function TimeLogPage() {
     entryDate: string;
     durationMinutes: number;
     activity: TimeEntryActivity;
+    performerType: PerformerType;
     notes?: string;
   }) => {
     if (!selectedClinic) {
@@ -88,6 +90,7 @@ export default function TimeLogPage() {
           entryDate: data.entryDate,
           durationMinutes: data.durationMinutes,
           activity: data.activity,
+          performerType: data.performerType,
           notes: data.notes,
         }
       );
@@ -235,7 +238,8 @@ export default function TimeLogPage() {
 
           {/* CPT Eligibility Badges */}
           <div className="flex flex-wrap gap-2 mb-4">
-            {['99453', '99445', '99454', '99470', '99457', '99458', '99490'].map((code) => {
+            {/* RPM codes */}
+            {['99453', '99445', '99454', '99470', '99457', '99458', '99091'].map((code) => {
               const isEligible = billingSummary.eligibleCodes.includes(code);
               const count = billingSummary.eligibleCodes.filter((c) => c === code).length;
               return (
@@ -243,9 +247,12 @@ export default function TimeLogPage() {
                   key={code}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${
                     isEligible
-                      ? 'bg-green-100 text-green-800 border border-green-200'
+                      ? code === '99091'
+                        ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                        : 'bg-green-100 text-green-800 border border-green-200'
                       : 'bg-gray-100 text-gray-500 border border-gray-200'
                   }`}
+                  title={CPT_CODE_LABELS[code]}
                 >
                   {isEligible && (
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -256,10 +263,46 @@ export default function TimeLogPage() {
                 </div>
               );
             })}
+            {/* CCM codes */}
+            {['99490', '99439', '99491', '99437'].map((code) => {
+              const isEligible = billingSummary.eligibleCodes.includes(code);
+              const count = billingSummary.eligibleCodes.filter((c) => c === code).length;
+              if (!isEligible) return null;
+              return (
+                <div
+                  key={code}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-purple-100 text-purple-800 border border-purple-200"
+                  title={CPT_CODE_LABELS[code]}
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  {code}{count > 1 ? ` x${count}` : ''}
+                </div>
+              );
+            })}
+            {/* PCM codes */}
+            {['99424', '99425', '99426', '99427'].map((code) => {
+              const isEligible = billingSummary.eligibleCodes.includes(code);
+              const count = billingSummary.eligibleCodes.filter((c) => c === code).length;
+              if (!isEligible) return null;
+              return (
+                <div
+                  key={code}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-orange-100 text-orange-800 border border-orange-200"
+                  title={CPT_CODE_LABELS[code]}
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  {code}{count > 1 ? ` x${count}` : ''}
+                </div>
+              );
+            })}
           </div>
 
           {/* Metrics Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="bg-white/50 rounded-lg p-3">
               <p className="text-2xl font-bold text-gray-900">{billingSummary.deviceTransmission.totalDays}</p>
               <p className="text-xs text-gray-600">Device Days</p>
@@ -271,9 +314,14 @@ export default function TimeLogPage() {
               <p className="text-xs text-gray-400 mt-1">10+ for 99470, 20+ for 99457</p>
             </div>
             <div className="bg-white/50 rounded-lg p-3">
-              <p className="text-2xl font-bold text-gray-900">{billingSummary.time.ccmMinutes}</p>
-              <p className="text-xs text-gray-600">CCM Minutes</p>
+              <p className="text-2xl font-bold text-gray-900">{billingSummary.time.ccmClinicalStaffMinutes || 0}</p>
+              <p className="text-xs text-gray-600">CCM Staff Min</p>
               <p className="text-xs text-gray-400 mt-1">20+ for 99490</p>
+            </div>
+            <div className="bg-white/50 rounded-lg p-3">
+              <p className="text-2xl font-bold text-gray-900">{billingSummary.time.ccmPhysicianMinutes || 0}</p>
+              <p className="text-xs text-gray-600">CCM Physician Min</p>
+              <p className="text-xs text-gray-400 mt-1">30+ for 99491</p>
             </div>
             <div className="bg-white/50 rounded-lg p-3">
               <p className="text-2xl font-bold text-gray-900">{summary?.entryCount || 0}</p>
