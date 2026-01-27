@@ -220,7 +220,7 @@ async function main() {
     },
   });
 
-  // Clinician 2 -> Patient 4 (active, primary)
+  // Clinician 2 -> Patient 4 (active, primary, PCM track for dialysis patient)
   await prisma.enrollment.upsert({
     where: {
       patientId_clinicianId_clinicId: {
@@ -237,6 +237,7 @@ async function main() {
       status: "ACTIVE",
       isPrimary: true,
       enrolledVia: "MIGRATION",
+      billingProgram: "RPM_PCM", // Single high-risk condition (dialysis)
     },
   });
 
@@ -1032,7 +1033,7 @@ async function main() {
   // Time Entries (RPM/CCM billing)
   // ============================================
 
-  // Clinician 1 - Time entries for Patient 1
+  // Clinician 1 - Time entries for Patient 1 (CCM track with mixed staff/physician time)
   await prisma.timeEntry.createMany({
     data: [
       {
@@ -1042,6 +1043,7 @@ async function main() {
         entryDate: daysAgo(10),
         durationMinutes: 15,
         activity: "PATIENT_REVIEW",
+        performerType: "CLINICAL_STAFF", // RPM activity
         notes: "Reviewed weight trend and BP readings",
       },
       {
@@ -1051,6 +1053,7 @@ async function main() {
         entryDate: daysAgo(7),
         durationMinutes: 20,
         activity: "PHONE_CALL",
+        performerType: "CLINICAL_STAFF", // CCM activity - staff time
         notes: "Called patient about elevated BP, discussed medication adherence",
       },
       {
@@ -1060,6 +1063,7 @@ async function main() {
         entryDate: daysAgo(3),
         durationMinutes: 10,
         activity: "PATIENT_REVIEW",
+        performerType: "CLINICAL_STAFF", // RPM activity
         notes: "Reviewed critical weight gain alert",
       },
       {
@@ -1069,6 +1073,7 @@ async function main() {
         entryDate: daysAgo(2),
         durationMinutes: 25,
         activity: "CARE_PLAN_UPDATE",
+        performerType: "CLINICAL_STAFF", // CCM activity - staff time
         notes: "Updated fluid restriction guidance, adjusted diuretic timing",
       },
       {
@@ -1078,12 +1083,23 @@ async function main() {
         entryDate: daysAgo(1),
         durationMinutes: 15,
         activity: "COORDINATION",
+        performerType: "CLINICAL_STAFF", // CCM activity - staff time
         notes: "Coordinated with nephrology for urgent follow-up",
+      },
+      {
+        patientId: patient1.id,
+        clinicianId: clinician1.id,
+        clinicId: clinic.id,
+        entryDate: daysAgo(1),
+        durationMinutes: 35,
+        activity: "PHONE_CALL",
+        performerType: "PHYSICIAN_QHP", // CCM activity - physician time for 99491
+        notes: "Physician call to discuss treatment plan changes",
       },
     ],
   });
 
-  // Clinician 1 - Time entries for Patient 2
+  // Clinician 1 - Time entries for Patient 2 (CCM track)
   await prisma.timeEntry.createMany({
     data: [
       {
@@ -1093,6 +1109,7 @@ async function main() {
         entryDate: daysAgo(14),
         durationMinutes: 10,
         activity: "PATIENT_REVIEW",
+        performerType: "CLINICAL_STAFF",
         notes: "Routine review - all metrics stable",
       },
       {
@@ -1102,12 +1119,13 @@ async function main() {
         entryDate: daysAgo(5),
         durationMinutes: 15,
         activity: "DOCUMENTATION",
+        performerType: "CLINICAL_STAFF",
         notes: "Updated care documentation for quarterly review",
       },
     ],
   });
 
-  // Clinician 2 - Time entries for Patient 4
+  // Clinician 2 - Time entries for Patient 4 (PCM track - single high-risk condition)
   await prisma.timeEntry.createMany({
     data: [
       {
@@ -1117,6 +1135,7 @@ async function main() {
         entryDate: daysAgo(12),
         durationMinutes: 20,
         activity: "PATIENT_REVIEW",
+        performerType: "CLINICAL_STAFF", // RPM activity
         notes: "Post-dialysis review, patient reporting fatigue",
       },
       {
@@ -1124,9 +1143,10 @@ async function main() {
         clinicianId: clinician2.id,
         clinicId: clinic.id,
         entryDate: daysAgo(6),
-        durationMinutes: 30,
+        durationMinutes: 35,
         activity: "PHONE_CALL",
-        notes: "Called patient about worsening symptoms, recommended dialysis schedule adjustment",
+        performerType: "PHYSICIAN_QHP", // PCM activity - physician for 99424
+        notes: "Physician call about worsening symptoms, recommended dialysis schedule adjustment",
       },
       {
         patientId: patient4.id,
@@ -1135,6 +1155,7 @@ async function main() {
         entryDate: daysAgo(5),
         durationMinutes: 15,
         activity: "COORDINATION",
+        performerType: "CLINICAL_STAFF", // PCM activity - staff time
         notes: "Coordinated with dialysis center about schedule change",
       },
       {
@@ -1144,7 +1165,18 @@ async function main() {
         entryDate: daysAgo(1),
         durationMinutes: 10,
         activity: "PATIENT_REVIEW",
+        performerType: "CLINICAL_STAFF", // RPM activity
         notes: "Reviewed critical potassium alert from recent labs",
+      },
+      {
+        patientId: patient4.id,
+        clinicianId: clinician2.id,
+        clinicId: clinic.id,
+        entryDate: daysAgo(1),
+        durationMinutes: 30,
+        activity: "CARE_PLAN_UPDATE",
+        performerType: "PHYSICIAN_QHP", // PCM activity - more physician time for 99425 add-on
+        notes: "Physician review and update of dialysis care plan",
       },
     ],
   });
@@ -1195,6 +1227,16 @@ async function main() {
   console.log("Clinician 1 does NOT see: Patient 3 (discharged), Patient 4 (not enrolled)");
   console.log("Clinician 2 sees: Patient 2 (shared), Patient 4");
   console.log("Clinician 2 does NOT see: Patient 1, Patient 3");
+
+  console.log("\n--- Billing Demo Scenarios ---");
+  console.log("Patient 1 (CCM track - RPM_CCM): Mixed staff + physician time");
+  console.log("  - 60 min CCM staff time -> 99490 + 99439 (2 add-on blocks)");
+  console.log("  - 35 min CCM physician time -> 99491");
+  console.log("Patient 2 (CCM track - RPM_CCM): Staff time only");
+  console.log("  - Below threshold, no CCM codes eligible");
+  console.log("Patient 4 (PCM track - RPM_PCM): Dialysis patient, single high-risk condition");
+  console.log("  - 65 min PCM physician time -> 99424 + 99425 (add-on block)");
+  console.log("  - Staff time not used (physician takes priority in PCM)");
 
   console.log("\nSeeding complete!");
 }

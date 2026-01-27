@@ -176,6 +176,8 @@ model Enrollment {
   dischargedAt DateTime?
   // RPM billing: 99453 is one-time initial setup per enrollment
   initialSetupBilledAt DateTime? // Date when 99453 was billed (null = not yet billed)
+  // Billing program determines CCM vs PCM track
+  billingProgram BillingProgram @default(RPM_CCM)
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
@@ -195,6 +197,12 @@ enum EnrolledVia {
   INVITE
   MIGRATION
   ADMIN
+}
+
+enum BillingProgram {
+  RPM_CCM    // 2+ chronic conditions (default)
+  RPM_PCM    // Single high-risk condition
+  RPM_ONLY   // RPM without care management
 }
 
 enum EnrollmentStatus {
@@ -755,6 +763,7 @@ model TimeEntry {
   entryDate       DateTime          @db.Date
   durationMinutes Int               // 1-120 minutes
   activity        TimeEntryActivity
+  performerType   PerformerType     @default(CLINICAL_STAFF) // Who performed the service
   notes           String?
 
   createdAt       DateTime          @default(now())
@@ -773,6 +782,11 @@ enum TimeEntryActivity {
   COORDINATION        // Care coordination with other providers
   DOCUMENTATION       // Documenting patient encounter
   OTHER
+}
+
+enum PerformerType {
+  CLINICAL_STAFF    // Under physician supervision (default)
+  PHYSICIAN_QHP     // Physician/QHP personally provided
 }
 
 // ============================================

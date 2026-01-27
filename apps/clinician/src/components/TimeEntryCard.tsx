@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { TimeEntry, TIME_ENTRY_ACTIVITY_LABELS } from '@/lib/types';
+import { TimeEntry, TIME_ENTRY_ACTIVITY_LABELS, PERFORMER_TYPE_LABELS, PerformerType } from '@/lib/types';
 import { formatDistanceToNow } from '@/lib/utils';
 import Button from '@/components/ui/Button';
 
 interface TimeEntryCardProps {
   entry: TimeEntry;
   currentClinicianId: string;
-  onEdit: (id: string, data: { durationMinutes?: number; activity?: string; notes?: string | null }) => Promise<void>;
+  onEdit: (id: string, data: { durationMinutes?: number; activity?: string; performerType?: string; notes?: string | null }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
 
@@ -23,6 +23,7 @@ export default function TimeEntryCard({
   const [isSaving, setIsSaving] = useState(false);
   const [editDuration, setEditDuration] = useState(entry.durationMinutes.toString());
   const [editActivity, setEditActivity] = useState(entry.activity);
+  const [editPerformerType, setEditPerformerType] = useState<PerformerType>(entry.performerType || 'CLINICAL_STAFF');
   const [editNotes, setEditNotes] = useState(entry.notes || '');
 
   const isOwner = entry.clinicianId === currentClinicianId;
@@ -34,6 +35,7 @@ export default function TimeEntryCard({
       await onEdit(entry.id, {
         durationMinutes: parseInt(editDuration, 10),
         activity: editActivity,
+        performerType: editPerformerType,
         notes: editNotes || null,
       });
       setIsEditing(false);
@@ -60,6 +62,7 @@ export default function TimeEntryCard({
     setIsEditing(false);
     setEditDuration(entry.durationMinutes.toString());
     setEditActivity(entry.activity);
+    setEditPerformerType(entry.performerType || 'CLINICAL_STAFF');
     setEditNotes(entry.notes || '');
   };
 
@@ -67,7 +70,7 @@ export default function TimeEntryCard({
     return (
       <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Duration (minutes)
@@ -91,6 +94,20 @@ export default function TimeEntryCard({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {Object.entries(TIME_ENTRY_ACTIVITY_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Performed By
+              </label>
+              <select
+                value={editPerformerType}
+                onChange={(e) => setEditPerformerType(e.target.value as PerformerType)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {Object.entries(PERFORMER_TYPE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
@@ -125,12 +142,19 @@ export default function TimeEntryCard({
     <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
               {entry.durationMinutes} min
             </span>
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
               {TIME_ENTRY_ACTIVITY_LABELS[entry.activity]}
+            </span>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+              entry.performerType === 'PHYSICIAN_QHP'
+                ? 'bg-purple-100 text-purple-800'
+                : 'bg-orange-100 text-orange-800'
+            }`}>
+              {PERFORMER_TYPE_LABELS[entry.performerType || 'CLINICAL_STAFF']}
             </span>
           </div>
           {entry.notes && (

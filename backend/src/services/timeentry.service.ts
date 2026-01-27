@@ -1,4 +1,4 @@
-import { TimeEntryActivity } from "@prisma/client";
+import { TimeEntryActivity, PerformerType } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 
 export interface CreateTimeEntryInput {
@@ -8,6 +8,7 @@ export interface CreateTimeEntryInput {
   entryDate: Date;
   durationMinutes: number;
   activity: TimeEntryActivity;
+  performerType?: PerformerType;
   notes?: string;
 }
 
@@ -15,6 +16,7 @@ export interface UpdateTimeEntryInput {
   entryDate?: Date;
   durationMinutes?: number;
   activity?: TimeEntryActivity;
+  performerType?: PerformerType;
   notes?: string | null;
 }
 
@@ -70,6 +72,7 @@ export async function createTimeEntry(input: CreateTimeEntryInput) {
       entryDate: input.entryDate,
       durationMinutes: input.durationMinutes,
       activity: input.activity,
+      performerType: input.performerType ?? "CLINICAL_STAFF",
       notes: input.notes,
     },
     include: {
@@ -218,6 +221,7 @@ export async function updateTimeEntry(
       ...(input.entryDate !== undefined && { entryDate: input.entryDate }),
       ...(input.durationMinutes !== undefined && { durationMinutes: input.durationMinutes }),
       ...(input.activity !== undefined && { activity: input.activity }),
+      ...(input.performerType !== undefined && { performerType: input.performerType }),
       ...(input.notes !== undefined && { notes: input.notes }),
     },
     include: {

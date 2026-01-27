@@ -1529,7 +1529,7 @@ router.post("/patients/:patientId/time-entries", async (req: Request, res: Respo
   try {
     const { patientId } = req.params;
     const clinicianId = req.user!.sub;
-    const { clinicId, entryDate, durationMinutes, activity, notes } = req.body;
+    const { clinicId, entryDate, durationMinutes, activity, performerType, notes } = req.body;
 
     // Validate required fields
     if (!clinicId) {
@@ -1563,6 +1563,13 @@ router.post("/patients/:patientId/time-entries", async (req: Request, res: Respo
       return;
     }
 
+    // Validate performerType if provided
+    const validPerformerTypes = ["CLINICAL_STAFF", "PHYSICIAN_QHP"];
+    if (performerType && !validPerformerTypes.includes(performerType)) {
+      res.status(400).json({ error: `Invalid performerType. Must be one of: ${validPerformerTypes.join(", ")}` });
+      return;
+    }
+
     const timeEntry = await createTimeEntry({
       patientId,
       clinicianId,
@@ -1570,6 +1577,7 @@ router.post("/patients/:patientId/time-entries", async (req: Request, res: Respo
       entryDate: new Date(entryDate),
       durationMinutes,
       activity,
+      performerType,
       notes,
     });
 
@@ -1670,7 +1678,7 @@ router.put("/time-entries/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const clinicianId = req.user!.sub;
-    const { entryDate, durationMinutes, activity, notes } = req.body;
+    const { entryDate, durationMinutes, activity, performerType, notes } = req.body;
 
     // Validate activity if provided
     if (activity) {
@@ -1688,10 +1696,20 @@ router.put("/time-entries/:id", async (req: Request, res: Response) => {
       }
     }
 
+    // Validate performerType if provided
+    if (performerType) {
+      const validPerformerTypes = ["CLINICAL_STAFF", "PHYSICIAN_QHP"];
+      if (!validPerformerTypes.includes(performerType)) {
+        res.status(400).json({ error: `Invalid performerType. Must be one of: ${validPerformerTypes.join(", ")}` });
+        return;
+      }
+    }
+
     const timeEntry = await updateTimeEntry(id, clinicianId, {
       entryDate: entryDate ? new Date(entryDate) : undefined,
       durationMinutes,
       activity,
+      performerType,
       notes,
     });
 
@@ -1766,6 +1784,53 @@ router.get("/patients/:patientId/billing-summary", async (req: Request, res: Res
   } catch (error) {
     logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch billing summary");
     res.status(500).json({ error: "Failed to fetch billing summary" });
+  }
+});
+
+// PUT /clinician/patients/:patientId/billing-program - Update patient billing program
+router.put("/patients/:patientId/billing-program", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+    const { billingProgram } = req.body;
+
+    // Validate billing program
+    const validPrograms = ["RPM_CCM", "RPM_PCM", "RPM_ONLY"];
+    if (!billingProgram || !validPrograms.includes(billingProgram)) {
+      res.status(400).json({ error: `billingProgram is required and must be one of: ${validPrograms.join(", ")}` });
+      return;
+    }
+
+    // Find enrollment and verify access
+    const enrollment = await prisma.enrollment.findFirst({
+      where: {
+        patientId,
+        clinicianId,
+        status: "ACTIVE",
+      },
+    });
+
+    if (!enrollment) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    // Update the billing program
+    const updated = await prisma.enrollment.update({
+      where: { id: enrollment.id },
+      data: { billingProgram },
+      select: {
+        id: true,
+        patientId: true,
+        billingProgram: true,
+        updatedAt: true,
+      },
+    });
+
+    res.json({ enrollment: updated });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to update billing program");
+    res.status(500).json({ error: "Failed to update billing program" });
   }
 });
 
