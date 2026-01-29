@@ -34,6 +34,7 @@ model Patient {
   labReports            LabReport[]
   deviceConnections     DeviceConnection[]
   timeEntries           TimeEntry[]
+  toxinRecords          PatientToxinRecord[]
 
   @@map("patients")
 }
@@ -56,6 +57,7 @@ model Clinician {
   verifiedLabReports   LabReport[]
   timeEntries          TimeEntry[]
   notificationPreference NotificationPreference?
+  educatedToxinRecords PatientToxinRecord[]
 
   @@map("clinicians")
 }
@@ -834,4 +836,58 @@ enum NotificationStatus {
   SENT
   FAILED
   SKIPPED
+}
+
+// ============================================
+// Kidney Toxin Tracking
+// ============================================
+
+enum ToxinRiskLevel {
+  LOW       // Use with caution
+  MODERATE  // Avoid if possible
+  HIGH      // Avoid completely
+}
+
+// Toxin category definitions (configurable list)
+model KidneyToxinCategory {
+  id          String         @id @default(uuid())
+  name        String         @unique // e.g., "IV Contrast", "NSAIDs"
+  description String?        // Educational description
+  examples    String?        // e.g., "ibuprofen, naproxen, meloxicam"
+  riskLevel   ToxinRiskLevel @default(MODERATE)
+  isActive    Boolean        @default(true)
+  sortOrder   Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  patientRecords PatientToxinRecord[]
+
+  @@map("kidney_toxin_categories")
+}
+
+// Per-patient toxin tracking
+model PatientToxinRecord {
+  id               String    @id @default(uuid())
+  patientId        String
+  toxinCategoryId  String
+
+  // Tracking data
+  isEducated       Boolean   @default(false)
+  educatedAt       DateTime?
+  educatedById     String?   // Clinician who educated
+  lastExposureDate DateTime? @db.Date
+  exposureNotes    String?   // Free-text notes about exposure
+  riskOverride     ToxinRiskLevel? // Patient-specific risk level override
+  notes            String?   // General notes
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  patient       Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  toxinCategory KidneyToxinCategory @relation(fields: [toxinCategoryId], references: [id])
+  educatedBy    Clinician?          @relation(fields: [educatedById], references: [id])
+
+  @@unique([patientId, toxinCategoryId])
+  @@index([patientId])
+  @@map("patient_toxin_records")
 }

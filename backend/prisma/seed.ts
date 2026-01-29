@@ -1215,6 +1215,160 @@ async function main() {
 
   console.log("Created clinician notes");
 
+  // ============================================
+  // Kidney Toxin Categories
+  // ============================================
+
+  const toxinCategories = [
+    {
+      name: "IV Contrast",
+      description: "Iodinated contrast used for CT scans and angiography can cause acute kidney injury, especially in patients with reduced kidney function.",
+      examples: "CT scans, heart catheterization, angiograms",
+      riskLevel: "HIGH" as const,
+      sortOrder: 1,
+    },
+    {
+      name: "NSAIDs",
+      description: "Non-steroidal anti-inflammatory drugs reduce blood flow to the kidneys and can cause acute kidney injury or worsen chronic kidney disease.",
+      examples: "Ibuprofen (Advil, Motrin), Naproxen (Aleve), Meloxicam, Aspirin (high-dose)",
+      riskLevel: "HIGH" as const,
+      sortOrder: 2,
+    },
+    {
+      name: "Nephrotoxic Antibiotics",
+      description: "Certain antibiotics can damage kidney tubules or cause interstitial nephritis. Dose adjustment or alternative antibiotics may be needed.",
+      examples: "Aminoglycosides (Gentamicin, Tobramycin), Vancomycin, Amphotericin B",
+      riskLevel: "MODERATE" as const,
+      sortOrder: 3,
+    },
+    {
+      name: "Certain Blood Pressure Meds",
+      description: "ACE inhibitors and ARBs are kidney-protective long-term but may need dose adjustment during acute illness or dehydration.",
+      examples: "ACE inhibitors (Lisinopril, Enalapril), ARBs (Losartan, Valsartan) - monitor closely",
+      riskLevel: "LOW" as const,
+      sortOrder: 4,
+    },
+    {
+      name: "Phosphate-containing Products",
+      description: "High phosphorus burden can accelerate CKD progression and cause dangerous calcium-phosphate deposits in blood vessels.",
+      examples: "Certain laxatives (Fleet enemas), phosphate supplements, some processed foods",
+      riskLevel: "MODERATE" as const,
+      sortOrder: 5,
+    },
+    {
+      name: "Herbal Supplements",
+      description: "Many herbal products are unregulated and may contain nephrotoxic substances. Some have been linked to kidney failure.",
+      examples: "Aristolochic acid herbs, excessive licorice, certain weight loss supplements",
+      riskLevel: "MODERATE" as const,
+      sortOrder: 6,
+    },
+  ];
+
+  for (const category of toxinCategories) {
+    await prisma.kidneyToxinCategory.upsert({
+      where: { name: category.name },
+      update: {},
+      create: category,
+    });
+  }
+
+  console.log("Created kidney toxin categories");
+
+  // Create sample patient toxin records for demo
+  const ivContrastCategory = await prisma.kidneyToxinCategory.findUnique({
+    where: { name: "IV Contrast" },
+  });
+  const nsaidsCategory = await prisma.kidneyToxinCategory.findUnique({
+    where: { name: "NSAIDs" },
+  });
+  const antibioticsCategory = await prisma.kidneyToxinCategory.findUnique({
+    where: { name: "Nephrotoxic Antibiotics" },
+  });
+
+  if (ivContrastCategory && nsaidsCategory && antibioticsCategory) {
+    // Patient 1 - Has been educated about IV Contrast, had recent exposure
+    await prisma.patientToxinRecord.upsert({
+      where: {
+        patientId_toxinCategoryId: {
+          patientId: patient1.id,
+          toxinCategoryId: ivContrastCategory.id,
+        },
+      },
+      update: {},
+      create: {
+        patientId: patient1.id,
+        toxinCategoryId: ivContrastCategory.id,
+        isEducated: true,
+        educatedAt: new Date("2025-12-15"),
+        educatedById: clinician1.id,
+        lastExposureDate: new Date("2025-12-20"),
+        exposureNotes: "CT scan for kidney stone evaluation. Pre-hydration protocol followed.",
+        notes: "Patient understands need for pre/post hydration with contrast.",
+      },
+    });
+
+    // Patient 1 - NSAIDs - educated but no exposure recorded
+    await prisma.patientToxinRecord.upsert({
+      where: {
+        patientId_toxinCategoryId: {
+          patientId: patient1.id,
+          toxinCategoryId: nsaidsCategory.id,
+        },
+      },
+      update: {},
+      create: {
+        patientId: patient1.id,
+        toxinCategoryId: nsaidsCategory.id,
+        isEducated: true,
+        educatedAt: new Date("2025-11-01"),
+        educatedById: clinician1.id,
+        notes: "Patient switched from ibuprofen to acetaminophen for pain management.",
+      },
+    });
+
+    // Patient 4 - IV Contrast - not yet educated (dialysis patient, higher risk)
+    await prisma.patientToxinRecord.upsert({
+      where: {
+        patientId_toxinCategoryId: {
+          patientId: patient4.id,
+          toxinCategoryId: ivContrastCategory.id,
+        },
+      },
+      update: {},
+      create: {
+        patientId: patient4.id,
+        toxinCategoryId: ivContrastCategory.id,
+        isEducated: false,
+        riskOverride: "HIGH",
+        notes: "HD patient - extra caution required if contrast needed.",
+      },
+    });
+
+    // Patient 4 - Antibiotics - recent exposure due to infection
+    await prisma.patientToxinRecord.upsert({
+      where: {
+        patientId_toxinCategoryId: {
+          patientId: patient4.id,
+          toxinCategoryId: antibioticsCategory.id,
+        },
+      },
+      update: {},
+      create: {
+        patientId: patient4.id,
+        toxinCategoryId: antibioticsCategory.id,
+        isEducated: true,
+        educatedAt: new Date("2025-10-15"),
+        educatedById: clinician2.id,
+        lastExposureDate: new Date("2025-11-20"),
+        exposureNotes: "Vancomycin for catheter-related infection. Levels monitored closely.",
+        riskOverride: "HIGH",
+        notes: "History of vancomycin use for line infections. Always check levels.",
+      },
+    });
+  }
+
+  console.log("Created patient toxin records");
+
   console.log("\n--- Test Credentials ---");
   console.log("Clinician 1: clinician1@test.com / password123");
   console.log("Clinician 2: clinician2@test.com / password123");

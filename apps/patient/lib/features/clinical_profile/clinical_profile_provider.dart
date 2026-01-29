@@ -3,14 +3,17 @@ import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/api/api_exceptions.dart';
 import '../../core/models/clinical_profile.dart';
+import '../../core/models/toxin.dart';
 
 /// Provider for managing clinical profile data
 class ClinicalProfileProvider extends ChangeNotifier {
   final ApiClient _apiClient;
 
   ClinicalProfileResponse? _profileResponse;
+  List<PatientToxinRecord> _toxinRecords = [];
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _toxinsLoading = false;
   String? _error;
 
   ClinicalProfileProvider(this._apiClient);
@@ -24,11 +27,17 @@ class ClinicalProfileProvider extends ChangeNotifier {
   /// Completeness info
   ProfileCompleteness? get completeness => _profileResponse?.completeness;
 
+  /// Toxin records
+  List<PatientToxinRecord> get toxinRecords => _toxinRecords;
+
   /// Whether profile is loading
   bool get isLoading => _isLoading;
 
   /// Whether profile is saving
   bool get isSaving => _isSaving;
+
+  /// Whether toxins are loading
+  bool get toxinsLoading => _toxinsLoading;
 
   /// Error message if any
   String? get error => _error;
@@ -44,6 +53,9 @@ class ClinicalProfileProvider extends ChangeNotifier {
       _profileResponse = ClinicalProfileResponse.fromJson(response);
       _isLoading = false;
       notifyListeners();
+
+      // Also fetch toxins
+      await fetchToxins();
     } on ApiException catch (e) {
       _error = e.message;
       _isLoading = false;
@@ -51,6 +63,25 @@ class ClinicalProfileProvider extends ChangeNotifier {
     } catch (e) {
       _error = 'Failed to load clinical profile';
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Fetch toxin records from /patient/toxins
+  Future<void> fetchToxins() async {
+    _toxinsLoading = true;
+    notifyListeners();
+
+    try {
+      final response = await _apiClient.get(ApiEndpoints.toxins);
+      final toxinsResponse = PatientToxinsResponse.fromJson(response);
+      _toxinRecords = toxinsResponse.records;
+      _toxinsLoading = false;
+      notifyListeners();
+    } catch (e) {
+      // Don't fail the whole profile if toxins fail
+      debugPrint('Failed to load toxins: $e');
+      _toxinsLoading = false;
       notifyListeners();
     }
   }

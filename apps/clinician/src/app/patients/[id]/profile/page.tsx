@@ -15,9 +15,14 @@ import {
   ETIOLOGY_LABELS,
   SEX_LABELS,
   TRANSPLANT_STATUS_LABELS,
+  PatientToxinsResponse,
+  PatientToxinRecord,
+  KidneyToxinCategory,
+  ToxinRiskLevel,
 } from '@/lib/types';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import ToxinCard from '@/components/ToxinCard';
 
 export default function PatientProfilePage() {
   const router = useRouter();
@@ -30,6 +35,11 @@ export default function PatientProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Toxins state
+  const [toxinRecords, setToxinRecords] = useState<PatientToxinRecord[]>([]);
+  const [toxinCategories, setToxinCategories] = useState<KidneyToxinCategory[]>([]);
+  const [toxinsLoading, setToxinsLoading] = useState(true);
 
   // Edit form state
   const [editForm, setEditForm] = useState<{
@@ -67,13 +77,45 @@ export default function PatientProfilePage() {
     }
   }, [patientId, router]);
 
+  const fetchToxins = useCallback(async () => {
+    setToxinsLoading(true);
+    try {
+      const response = await api.get<PatientToxinsResponse>(
+        `/clinician/patients/${patientId}/toxins`
+      );
+      setToxinRecords(response.records);
+      setToxinCategories(response.categories);
+    } catch (err) {
+      console.error('Failed to fetch toxins:', err);
+    } finally {
+      setToxinsLoading(false);
+    }
+  }, [patientId]);
+
+  const handleToxinUpdate = async (categoryId: string, data: {
+    isEducated?: boolean;
+    lastExposureDate?: string | null;
+    exposureNotes?: string | null;
+    riskOverride?: ToxinRiskLevel | null;
+    notes?: string | null;
+  }) => {
+    await api.put(`/clinician/patients/${patientId}/toxins/${categoryId}`, data);
+    await fetchToxins();
+  };
+
+  const handleToxinEducate = async (categoryId: string) => {
+    await api.post(`/clinician/patients/${patientId}/toxins/${categoryId}/educate`, {});
+    await fetchToxins();
+  };
+
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/login');
       return;
     }
     fetchProfile();
-  }, [isAuthenticated, router, fetchProfile]);
+    fetchToxins();
+  }, [isAuthenticated, router, fetchProfile, fetchToxins]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -355,6 +397,37 @@ export default function PatientProfilePage() {
           )}
         </div>
       </Card>
+
+      {/* Substances to Limit */}
+      <div>
+        <h3 className="font-medium text-gray-900 mb-4">Substances to Limit</h3>
+        {toxinsLoading ? (
+          <div className="flex justify-center py-8">
+            <svg className="animate-spin h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {toxinCategories.map((category) => {
+              const record = toxinRecords.find(r => r.toxinCategoryId === category.id);
+              return (
+                <ToxinCard
+                  key={category.id}
+                  category={category}
+                  record={record}
+                  onUpdate={handleToxinUpdate}
+                  onEducate={handleToxinEducate}
+                />
+              );
+            })}
+            {toxinCategories.length === 0 && (
+              <p className="text-gray-500 text-center py-4">No toxin categories configured</p>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Last Updated */}
       {profile?.updatedAt && (

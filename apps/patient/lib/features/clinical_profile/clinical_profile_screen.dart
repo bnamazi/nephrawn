@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/api/api_client.dart';
 import '../../core/models/clinical_profile.dart';
+import '../../core/models/toxin.dart';
 import 'clinical_profile_provider.dart';
 
 /// Screen for viewing and editing clinical profile
@@ -110,6 +111,8 @@ class _ClinicalProfileContent extends StatelessWidget {
     ClinicalProfile profile,
     ProfileCompleteness? completeness,
   ) {
+    final provider = context.watch<ClinicalProfileProvider>();
+
     return RefreshIndicator(
       onRefresh: () => context.read<ClinicalProfileProvider>().fetchProfile(),
       child: SingleChildScrollView(
@@ -210,6 +213,11 @@ class _ClinicalProfileContent extends StatelessWidget {
                     warning: profile.medications.onNsaids),
               ],
             ),
+
+            const SizedBox(height: 16),
+
+            // Substances to Limit Section
+            _buildToxinsSection(context, provider.toxinRecords, provider.toxinsLoading),
 
             const SizedBox(height: 24),
 
@@ -392,5 +400,128 @@ class _ClinicalProfileContent extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildToxinsSection(
+      BuildContext context, List<PatientToxinRecord> records, bool isLoading) {
+    if (isLoading) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Center(
+            child: SizedBox(
+              height: 24,
+              width: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (records.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return _buildSection(
+      context,
+      title: 'Substances to Limit',
+      icon: Icons.warning_amber_outlined,
+      children: records.map((record) => _buildToxinRow(record)).toList(),
+    );
+  }
+
+  Widget _buildToxinRow(PatientToxinRecord record) {
+    final category = record.toxinCategory;
+    final riskLevel = record.effectiveRiskLevel;
+
+    Color riskColor;
+    switch (riskLevel) {
+      case ToxinRiskLevel.high:
+        riskColor = Colors.red;
+        break;
+      case ToxinRiskLevel.moderate:
+        riskColor = Colors.orange;
+        break;
+      case ToxinRiskLevel.low:
+        riskColor = Colors.yellow.shade700;
+        break;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: riskColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: riskColor.withOpacity(0.5)),
+                ),
+                child: Text(
+                  riskLevel.displayName,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: riskColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  category.name,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+              if (record.isEducated)
+                Icon(Icons.check_circle, size: 18, color: Colors.green),
+            ],
+          ),
+          if (category.description != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              category.description!,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+          if (category.examples != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Examples: ${category.examples}',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade500,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+          if (record.isEducated && record.educatedAt != null) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.school_outlined, size: 14, color: Colors.green.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  'Educated on ${_formatDate(record.educatedAt!)}',
+                  style: TextStyle(fontSize: 11, color: Colors.green.shade700),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.month}/${date.day}/${date.year}';
   }
 }

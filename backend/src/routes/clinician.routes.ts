@@ -82,6 +82,12 @@ import {
 } from "../services/billing.service.js";
 import * as notificationService from "../services/notification.service.js";
 import { notificationPreferencesSchema } from "../lib/validation.js";
+import {
+  getToxinCategories,
+  getPatientToxinRecords,
+  upsertPatientToxinRecord,
+  markPatientEducated,
+} from "../services/toxin.service.js";
 
 const router = Router();
 
@@ -1889,6 +1895,114 @@ router.put("/notifications/preferences", async (req: Request, res: Response) => 
   } catch (error) {
     logger.error({ err: error }, "Failed to update notification preferences");
     res.status(500).json({ error: "Failed to update notification preferences" });
+  }
+});
+
+// ============================================
+// Kidney Toxin Tracking
+// ============================================
+
+// GET /clinician/toxin-categories - Get all active toxin categories
+router.get("/toxin-categories", async (req: Request, res: Response) => {
+  try {
+    const categories = await getToxinCategories();
+    res.json({ categories });
+  } catch (error) {
+    logger.error({ err: error }, "Failed to fetch toxin categories");
+    res.status(500).json({ error: "Failed to fetch toxin categories" });
+  }
+});
+
+// GET /clinician/patients/:patientId/toxins - Get patient's toxin records
+router.get("/patients/:patientId/toxins", async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const records = await getPatientToxinRecords(patientId, clinicianId);
+
+    if (records === null) {
+      res.status(404).json({ error: "Patient not found or not enrolled" });
+      return;
+    }
+
+    // Also get all categories for UI convenience
+    const categories = await getToxinCategories();
+
+    res.json({ records, categories });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to fetch patient toxin records");
+    res.status(500).json({ error: "Failed to fetch patient toxin records" });
+  }
+});
+
+// PUT /clinician/patients/:patientId/toxins/:categoryId - Create/Update patient toxin record
+router.put("/patients/:patientId/toxins/:categoryId", async (req: Request, res: Response) => {
+  try {
+    const { patientId, categoryId } = req.params;
+    const clinicianId = req.user!.sub;
+    const { isEducated, lastExposureDate, exposureNotes, riskOverride, notes } = req.body;
+
+    // Validate riskOverride if provided
+    if (riskOverride !== undefined && riskOverride !== null) {
+      const validRiskLevels = ["LOW", "MODERATE", "HIGH"];
+      if (!validRiskLevels.includes(riskOverride)) {
+        res.status(400).json({ error: `Invalid riskOverride. Must be one of: ${validRiskLevels.join(", ")}` });
+        return;
+      }
+    }
+
+    // Parse lastExposureDate if provided
+    let parsedExposureDate: Date | null | undefined = undefined;
+    if (lastExposureDate !== undefined) {
+      if (lastExposureDate === null) {
+        parsedExposureDate = null;
+      } else {
+        parsedExposureDate = new Date(lastExposureDate);
+        if (isNaN(parsedExposureDate.getTime())) {
+          res.status(400).json({ error: "Invalid lastExposureDate" });
+          return;
+        }
+      }
+    }
+
+    const record = await upsertPatientToxinRecord(patientId, categoryId, clinicianId, {
+      isEducated,
+      lastExposureDate: parsedExposureDate,
+      exposureNotes,
+      riskOverride,
+      notes,
+    });
+
+    if (!record) {
+      res.status(404).json({ error: "Patient not found, not enrolled, or invalid toxin category" });
+      return;
+    }
+
+    res.json({ record });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to update patient toxin record");
+    res.status(500).json({ error: "Failed to update patient toxin record" });
+  }
+});
+
+// POST /clinician/patients/:patientId/toxins/:categoryId/educate - Mark patient as educated
+router.post("/patients/:patientId/toxins/:categoryId/educate", async (req: Request, res: Response) => {
+  try {
+    const { patientId, categoryId } = req.params;
+    const clinicianId = req.user!.sub;
+
+    const record = await markPatientEducated(patientId, categoryId, clinicianId);
+
+    if (!record) {
+      res.status(404).json({ error: "Patient not found, not enrolled, or invalid toxin category" });
+      return;
+    }
+
+    res.json({ record });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.params.patientId }, "Failed to mark patient as educated");
+    res.status(500).json({ error: "Failed to mark patient as educated" });
   }
 });
 

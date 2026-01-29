@@ -59,6 +59,7 @@ import {
   getDeviceConnection,
   syncWithingsData,
 } from "../services/device.service.js";
+import { getPatientToxinRecordsForPatient } from "../services/toxin.service.js";
 
 const router = Router();
 
@@ -255,6 +256,23 @@ router.get("/profile/history", async (req: Request, res: Response) => {
   } catch (error) {
     logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch profile history");
     res.status(500).json({ error: "Failed to fetch profile history" });
+  }
+});
+
+// ============================================
+// Substances to Limit (Toxins)
+// ============================================
+
+// GET /patient/toxins - Get own toxin records (read-only for patients)
+router.get("/toxins", async (req: Request, res: Response) => {
+  try {
+    const patientId = req.user!.sub;
+    const records = await getPatientToxinRecordsForPatient(patientId);
+
+    res.json({ records });
+  } catch (error) {
+    logger.error({ err: error, patientId: req.user?.sub }, "Failed to fetch toxin records");
+    res.status(500).json({ error: "Failed to fetch toxin records" });
   }
 });
 

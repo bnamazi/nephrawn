@@ -859,3 +859,63 @@ export interface NotificationPreference {
 export interface NotificationPreferenceResponse {
   preferences: NotificationPreference;
 }
+
+// ============================================
+// Kidney Toxin Tracking Types
+// ============================================
+
+export type ToxinRiskLevel = 'LOW' | 'MODERATE' | 'HIGH';
+
+export interface KidneyToxinCategory {
+  id: string;
+  name: string;
+  description: string | null;
+  examples: string | null;
+  riskLevel: ToxinRiskLevel;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PatientToxinRecord {
+  id: string;
+  patientId: string;
+  toxinCategoryId: string;
+  isEducated: boolean;
+  educatedAt: string | null;
+  educatedById: string | null;
+  lastExposureDate: string | null;
+  exposureNotes: string | null;
+  riskOverride: ToxinRiskLevel | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  toxinCategory: KidneyToxinCategory;
+  educatedBy: { id: string; name: string } | null;
+}
+
+export interface ToxinCategoriesResponse {
+  categories: KidneyToxinCategory[];
+}
+
+export interface PatientToxinsResponse {
+  records: PatientToxinRecord[];
+  categories: KidneyToxinCategory[];
+}
+
+export interface PatientToxinRecordResponse {
+  record: PatientToxinRecord;
+}
+
+export const TOXIN_RISK_LEVEL_LABELS: Record<ToxinRiskLevel, string> = {
+  LOW: 'Use with caution',
+  MODERATE: 'Avoid if possible',
+  HIGH: 'Avoid completely',
+};
+
+export const TOXIN_RISK_LEVEL_COLORS: Record<ToxinRiskLevel, string> = {
+  LOW: 'yellow',
+  MODERATE: 'orange',
+  HIGH: 'red',
+};

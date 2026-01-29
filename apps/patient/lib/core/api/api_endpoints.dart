@@ -19,6 +19,7 @@ class ApiEndpoints {
   // Clinical profile endpoints
   static const String clinicalProfile = '/patient/profile';
   static const String clinicalProfileHistory = '/patient/profile/history';
+  static const String toxins = '/patient/toxins';
 
   // Medication endpoints
   static const String medications = '/patient/medications';

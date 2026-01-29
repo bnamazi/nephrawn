@@ -138,8 +138,10 @@ export async function cleanupTestData() {
   await prisma.labReport.deleteMany({});
   await prisma.document.deleteMany({});
   await prisma.deviceConnection.deleteMany({});
+  await prisma.patientToxinRecord.deleteMany({});
   await prisma.enrollment.deleteMany({});
   await prisma.invite.deleteMany({});
+  await prisma.kidneyToxinCategory.deleteMany({});
   await prisma.clinicMembership.deleteMany({});
   await prisma.patient.deleteMany({});
   await prisma.clinician.deleteMany({});
